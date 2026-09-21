@@ -103,6 +103,11 @@ export class WsClient {
     this.ws.send(raw);
   }
 
+  /** Return everything queued so far without waiting (and clear the queue). */
+  drain(): WsMsg[] {
+    return this.queue.splice(0);
+  }
+
   send(message: unknown): void {
     this.ws.send(JSON.stringify(message));
   }

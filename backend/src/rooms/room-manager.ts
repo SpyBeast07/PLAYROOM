@@ -63,6 +63,19 @@ export class RoomManager {
     return player;
   }
 
+  /**
+   * The single place a room's status lock changes. The Mafia session drives it
+   * from the game lifecycle: "playing" when a game starts (addPlayer rejects
+   * with ROOM_STARTED until released) and back to "waiting" when the game ends
+   * or is destroyed. The room owns the one lock — the game never duplicates it.
+   */
+  setStatus(roomCode: string, status: RoomStatus): void {
+    const code = this.normalizeCode(roomCode);
+    const room = this.roomsByCode.get(code);
+    if (!room) throw new RoomError("ROOM_NOT_FOUND", "Room not found");
+    room.status = status;
+  }
+
   removePlayer(roomCode: string, playerId: string): void {
     const code = this.normalizeCode(roomCode);
     const room = this.roomsByCode.get(code);

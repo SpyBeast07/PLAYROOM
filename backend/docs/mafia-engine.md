@@ -5,12 +5,15 @@ the Mafia engine (`backend/src/games/mafia/`). It is the layer that the three
 presentation modes (pass-the-phone, own-mobile, narrator) share. Gameplay rules
 live in [`mafia-spec.md`](./mafia-spec.md), which this contract mirrors.
 
-Status: **Phase 10C — pre-integration audit complete.** `dispatch` validates
+Status: **Phase 11A — session layer bound.** `dispatch` validates
 and applies every action; nights, votes, and win conditions are resolved;
 derived per-player views are filled; the public view additionally reveals the
 full role assignment at GAME_OVER (spec §8.5). Force-resolved nights now
-attribute `PLAYER_UNAVAILABLE` to each actually-pending player. All 113 backend
-tests pass (`bun test`) and `tsc --noEmit` is clean. Audit notes in §13.
+attribute `PLAYER_UNAVAILABLE` to each actually-pending player. The room →
+engine adapter (`mafia-session.ts`) owns one game per room, identical player
+ids, lobby-only roster reconciliation, and the room's single lock state. All
+141 backend tests pass (`bun test`) and `tsc --noEmit` is clean. Audit notes in
+§13; session contract in §14.
 
 ---
 
@@ -313,3 +316,134 @@ determinism, edge cases). Findings and resolutions:
   private results, own vote, availability, deaths, and eliminations from the
   three views (no second identity system; room player IDs map 1:1 to engine
   player IDs).
+
+## 14. Phase 11A session contract (room → engine binding)
+
+`src/games/mafia/mafia-session.ts` is the **only** layer that knows both the
+room system (`src/rooms/room-manager.ts`) and the engine. It exists to answer
+"which game belongs to which room" and to keep both sides' lifecycles aligned —
+not to re-specify gameplay.
+
+Ownership split:
+
+- **RoomManager stays authoritative** for room existence, membership, names,
+  host, capacity, and join/leave. It additionally exposes one deliberate
+  mutation, `setStatus(roomCode, status)` (`"waiting" | "playing"`), which is
+  the single lock: when a game enters its first phase the session sets
+  `"playing"` (new joins rejected with `ROOM_STARTED`), and when a game ends or
+  is destroyed it sets `"waiting"`. There is deliberately no second
+  "room locked" concept anywhere.
+- **The session owns** one engine per normalized room code, the room-player →
+  engine-player mapping (ids are passed through unchanged; the engine's
+  name-uniqueness invariant is checked up front, yielding `NAME_TAKEN` where the
+  room would allow duplicates), and room-status transitions driven purely by the
+  engine's own `PHASE_CHANGED` events.
+- **The engine stays transport- and room-agnostic**; the session never mutates
+  room membership and never consults `isHost`.
+
+Key lifecycle decisions:
+
+- **Creation** (`createGame`): validates the room exists, has `4..20` players,
+  unique names, then constructs the engine in LOBBY seeded from the room's
+  current players. A second game for the same room throws `GAME_ALREADY_EXISTS`.
+- **Roster reconciliation** (`syncRoster` / every handle op): only while the
+  engine is in LOBBY. Players removed from the room leave the game lobby
+  (engine clears readiness); players added join it. Removal runs before
+  addition so a rename never trips name-uniqueness mid-sync. Once the game has
+  started the sync is a no-op: **room membership ≠ game participation** —
+  leaving the room does not remove you from the game; unavailability is
+  reported via `PLAYER_UNAVAILABLE` by the transport (a later phase).
+- **Lock/unlock**: a successful dispatch transitioning LOBBY→ROLE_REVEAL locks
+  the room (`"playing"`); GAME_OVER→LOBBY (`PLAY_AGAIN`) or `removeGame`
+  releases it (`"waiting"`). Lock application is best-effort: a store failure
+  never turns a valid dispatch into a failure.
+- **Deletion**: a game never outlives its room — the first access to a session
+  whose room is gone destroys it (lazy cleanup, no timers/TTL). `removeGame`
+  destroys the game and releases the lock if the room still exists, returning
+  whether anything was removed. Stale handles (from a removed/recreated game)
+  throw `GAME_NOT_FOUND`; a `getGame` cache miss returns `undefined`.
+- **Reconnect**: looking up the game after a reconnect returns the **same**
+  session object and the same engine player ids — no second identity, no fresh
+  player. Physical connection count is the transport's concern.
+- **Host**: never used. Room `isHost` is for room conveniences only; the engine
+  has no host and start/end authority is expressed by whoever may dispatch
+  `START_GAME`/`PLAY_AGAIN` in the (later) transport.
+
+Session surface: `getGame(roomCode)`, `createGame(roomCode)`, `syncRoster(roomCode)`,
+`dispatch(roomCode, action)`, `getPublicState(roomCode)`, `getPlayerState(roomCode, id)`,
+`getNarratorState(roomCode)`, `removeGame(roomCode)`; handles expose `roomCode`,
+`reconcile()`, `dispatch(action)`, `getPublicState()`, `getPlayerState(id)`,
+`getNarratorState()`. Errors are `MafiaSessionError` with codes
+`ROOM_NOT_FOUND | GAME_ALREADY_EXISTS | GAME_NOT_FOUND | NOT_ENOUGH_PLAYERS |
+TOO_MANY_PLAYERS (defensive) | NAME_TAKEN`. Tests: `mafia-session.test.ts`
+(this seam, including the two `setStatus` lock/unlock cases).
+
+## 15. Phase 11B WebSocket protocol (transport ↔ session)
+
+`src/realtime/ws.ts` is the only transport that talks to the Mafia session. It
+turns raw JSON frames into engine actions and engine results back into typed
+server messages. The HTTP room system (`room-manager.ts`, `connection-manager.ts`)
+stays authoritative for rooms; the engine state is authoritative for gameplay.
+
+Client → server (on `/ws/rooms/:code?playerId=:id`):
+
+- `{ type: "ping" }` → `pong` (generic transport ping).
+- `{ type: "mafia.action", action: MafiaAction }` — the only gameplay frame.
+  The server **derives** the actor on every dispatch; client-sent `actor` /
+  `playerId` fields are overwritten, never trusted:
+  - a non-host connection is a `PLAYER` acting on themselves (a mismatched
+    `playerId` is `INVALID_ACTOR` in the engine);
+  - the host (first-joined player, `isHost`) is additionally the **narrator** —
+    server-only actions it sends are dispatched as `NARRATOR` and gated per the
+    engine's narration rules.
+- Anything else on the `mafia.*` namespace is rejected top-level
+  (`UNKNOWN_MESSAGE_TYPE` as a generic `error`); malformed `mafia.action`
+  frames produce `MISSING_ACTION`; `{action: "nope"}` and unknown action types
+  produce `INVALID_ACTION`. Frames are **never** reprocessed as room actions.
+
+Allowlist gating happens in the transport **before** dispatch, in addition to
+the engine's own actor validation: `ACTION_FORBIDDEN` (no engine call) for
+any action a connection's authority class may never submit (e.g., `SYSTEM`-only
+`PLAYER_UNAVAILABLE`/`ADVANCE_PHASE`/`PLAY_AGAIN`, `NARRATOR`-only
+`RESOLVE_NIGHT`/`BEGIN_NIGHT` from a player). Defense-in-depth only; the engine
+remains the source of truth.
+
+Server → client:
+
+- `mafia.state` — the engine `getPublicState()` (no roles, night actions,
+  acting Mafia, votes, or role-seen data). Broadcast to the room **only after a
+  dispatch that changed game state**; unchanged/no-op results broadcast nothing.
+- `mafia.narrator` — `getNarratorState()` (roles, night actions, votes,
+  `readyState`, acting Mafia). Sent **only to the host connection**, and only
+  on a state-changing dispatch.
+- `mafia.private` — `getPlayerState(id)` (role, phase, `availableActions`,
+  `ownNightAction`, `ownPrivateNightResult`, `ownVoteTargetId`). Sent **only to
+  that player** and only when their serialized view changed since the last
+  broadcast (diffed per room+player in `privateSnapshots`). On room-game
+  creation every player's view is primed silently so the first dispatch emits
+  genuine diffs only.
+- `mafia.error` — single message type for mafia-channel failures (`createGame`
+  session errors, allowlist, and engine result errors); each error is sent only
+  to the connection that caused it and never severs the socket.
+- `room.updated` / generic `error` remain the transport's own non-mafia messages.
+
+Lifecycle decisions:
+
+- **Lazy creation**: the game is created from the room's live roster on the
+  first `mafia.action`, so joined-but-idle rooms never materialize a game.
+- **Reconnect** (`sendMafiaSync` on socket open): replays `mafia.state`,
+  `mafia.private`, and (host only) `mafia.narrator` — the same session object,
+  the same ids, no restart. The replayed private view carries the pending night
+  action so a client reconnects straight back into an in-flight game.
+- **Disconnect** (`PLAYER_UNAVAILABLE`, SYSTEM actor) is dispatched only when
+  the room still exists, a game exists, **and** the player has no remaining
+  connected sockets (multi-socket safe). It is a NIGHT-only no-op elsewhere and
+  marks the departed player's own night slot `SKIPPED` when not yet acted;
+  the player is never removed from the game, and the game does not terminate.
+- **Room membership ≠ participation**: joins after `"playing"` are rejected by
+  the room system; leaving mid-game is out of scope for this phase.
+
+Tests: `src/games/mafia/mafia-protocol.test.ts` covers the wire contract end to
+end (handshake, broadcast boundaries, action enforcement, information security /
+need-to-know, reconnect, disconnect/SKIPPED, multi-socket, and room isolation)
+against `src/test-server.ts`.

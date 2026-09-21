@@ -19,7 +19,26 @@ export class ConnectionManager {
       type: "room.updated",
       room: toPublicRoom(room),
     } satisfies ServerMessage);
-    this.sendToRoom(room.code, message);
+    this.broadcastMessage(room.code, message);
+  }
+
+  /** Send one raw (already JSON-encoded) message to every open connection in a room. */
+  broadcastMessage(roomCode: string, message: string): void {
+    for (const connection of this.forRoom(roomCode)) {
+      this.sendIfOpen(connection, message);
+    }
+  }
+
+  /** Send one raw message to every connection of a specific player in a room. */
+  sendToPlayer(roomCode: string, playerId: string, message: string): void {
+    for (const connection of this.forRoom(roomCode)) {
+      if (connection.playerId === playerId) this.sendIfOpen(connection, message);
+    }
+  }
+
+  /** True when a player still has at least one open connection in a room (multi-socket aware). */
+  hasPlayerConnections(roomCode: string, playerId: string): boolean {
+    return this.forRoom(roomCode).some((connection) => connection.playerId === playerId);
   }
 
   closePlayerConnections(playerId: string): void {
@@ -34,6 +53,12 @@ export class ConnectionManager {
     }
   }
 
+  private sendIfOpen(connection: Connection, message: string): void {
+    if (connection.socket.readyState === OPEN_READY_STATE) {
+      connection.socket.send(message);
+    }
+  }
+
   private forRoom(roomCode: string): Connection[] {
     return [...this.connections.values()].filter(
       (connection) => connection.roomCode === roomCode,
@@ -44,13 +69,5 @@ export class ConnectionManager {
     return [...this.connections.values()].filter(
       (connection) => connection.playerId === playerId,
     );
-  }
-
-  private sendToRoom(roomCode: string, message: string): void {
-    for (const connection of this.forRoom(roomCode)) {
-      if (connection.socket.readyState === OPEN_READY_STATE) {
-        connection.socket.send(message);
-      }
-    }
   }
 }

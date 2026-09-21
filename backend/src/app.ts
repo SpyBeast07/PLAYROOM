@@ -5,6 +5,7 @@ import { createRoomRouter } from "./routes/rooms.ts";
 import { ConnectionManager } from "./realtime/connection-manager.ts";
 import { createWsRouter } from "./realtime/ws.ts";
 import { RoomManager } from "./rooms/room-manager.ts";
+import { MafiaSessionManager } from "./games/mafia/mafia-session.ts";
 
 const DEFAULT_CORS_ORIGINS = ["http://localhost:5173"];
 
@@ -20,10 +21,11 @@ export function createApp() {
 
   const roomManager = new RoomManager();
   const connections = new ConnectionManager();
+  const mafiaSessions = new MafiaSessionManager(roomManager);
 
   app.route("/health", health);
   app.route("/rooms", createRoomRouter(roomManager, connections));
-  app.route("/ws", createWsRouter(roomManager, connections));
+  app.route("/ws", createWsRouter(roomManager, connections, mafiaSessions));
 
   return app;
 }
