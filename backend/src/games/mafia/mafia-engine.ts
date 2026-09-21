@@ -654,12 +654,21 @@ function resolveNight(
   let nightActions = state.nightActions;
   const events: MafiaEvent[] = [];
   if (force) {
-    for (const [key, slot] of Object.entries(nightActions) as Array<[keyof MafiaNightState["nightActions"], MafiaNightAction]>) {
-      if (slot.status === "NOT_ACTED") {
-        nightActions = { ...nightActions, [key]: { status: "SKIPPED", targetId: null } };
+    const pendingKeys = (["kill", "save", "investigate"] as const).filter(
+      (key) => nightActions[key].status === "NOT_ACTED",
+    );
+    const owners: Record<"kill" | "save" | "investigate", PlayerId | null> = {
+      kill: state.actingMafiaId,
+      save: roleHolderId(state, "DOCTOR_SAVE"),
+      investigate: roleHolderId(state, "DETECTIVE_INVESTIGATE"),
+    };
+    for (const key of pendingKeys) {
+      nightActions = { ...nightActions, [key]: { status: "SKIPPED", targetId: null } };
+      const playerId = owners[key];
+      if (playerId !== null) {
+        events.push({ type: "PLAYER_UNAVAILABLE", playerId, reason: "TIMED_OUT" });
       }
     }
-    events.push({ type: "PLAYER_UNAVAILABLE", playerId: state.actingMafiaId, reason: "TIMED_OUT" });
   }
 
   const resolved: ResolvedNight = computeResolution(state, nightActions);
@@ -954,6 +963,7 @@ function buildPublicState(state: MafiaGameState): MafiaPublicState {
     nightNumber: state.nightNumber,
     players: publicPlayers(state),
     winner: state.phase === "GAME_OVER" ? state.winner : null,
+    revealedRoles: state.phase === "GAME_OVER" ? state.roles : null,
   };
 
   switch (state.phase) {

@@ -271,6 +271,8 @@ export interface MafiaPublicState {
   nightNumber: number;
   players: MafiaPublicPlayer[];
   winner: MafiaTeam | null;
+  /** The full role assignment, public for everyone only at GAME_OVER (spec 8.5); null otherwise. */
+  revealedRoles: Record<PlayerId, MafiaRole> | null;
   /** Aggregate vote progress during VOTING (count, not who voted for whom). */
   voting: { cast: number; total: number } | null;
   /** Deaths to announce during MORNING; null otherwise. */

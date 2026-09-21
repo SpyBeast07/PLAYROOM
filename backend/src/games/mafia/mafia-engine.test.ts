@@ -191,6 +191,7 @@ test("public state omits every hidden field", () => {
     "nightNumber",
     "phase",
     "players",
+    "revealedRoles",
     "voting",
     "winner",
   ]);
@@ -198,6 +199,7 @@ test("public state omits every hidden field", () => {
   expect(publicState).not.toHaveProperty("votes");
   expect(publicState).not.toHaveProperty("nightActions");
   expect(publicState).not.toHaveProperty("actingMafiaId");
+  expect(publicState.revealedRoles).toBeNull();
   expect(publicState.voting).toBeNull();
   expect(publicState.morningDeaths).toBeNull();
   expect(publicState.elimination).toBeNull();

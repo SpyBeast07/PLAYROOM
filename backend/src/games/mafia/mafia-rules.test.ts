@@ -973,6 +973,7 @@ test("public and narrator boundaries never leak hidden state", () => {
     "nightNumber",
     "phase",
     "players",
+    "revealedRoles",
     "voting",
     "winner",
   ]);
@@ -980,9 +981,156 @@ test("public and narrator boundaries never leak hidden state", () => {
   expect(pub).not.toHaveProperty("votes");
   expect(pub).not.toHaveProperty("nightActions");
   expect(pub).not.toHaveProperty("actingMafiaId");
+  expect(pub.revealedRoles).toBeNull();
 
   const narrator = engine.getNarratorState();
   expect(narrator.actingMafiaId).toBe(nightState(engine).actingMafiaId);
   expect(narrator.nightActions).toEqual(nightState(engine).nightActions);
   expect(narrator.roles).toEqual(state(engine).roles);
+});
+
+// ---------------------------------------------------------------------------
+// Phase 10C audit regressions
+// ---------------------------------------------------------------------------
+
+test("force-resolve reports only pending slots' owners and keeps submitted kills", () => {
+  const engine = mk({ seed: 1 });
+  openGame(engine);
+  const doc = doctorId(engine);
+  const det = detectiveId(engine);
+  const villager = villagerId(engine);
+  kill(engine, villager);
+
+  const result = ok(engine, { type: "ADVANCE_PHASE", actor: SYS });
+  const unavailable = result.events.filter((e) => e.type === "PLAYER_UNAVAILABLE");
+  expect(unavailable.map((e) => e.playerId).sort()).toEqual([doc, det].sort());
+
+  expect(state(engine).phase).toBe("MORNING");
+  expect(state(engine).lastResolvedNight?.killedPlayerIds).toEqual([villager]);
+  expect(state(engine).lastResolvedNight?.saveTargetId).toBeNull();
+});
+
+test("GAME_OVER public state reveals the full role assignment (spec 8.5)", () => {
+  const engine = mk({ seed: 1 });
+  openGame(engine);
+  getToVoting(engine);
+  voteEveryoneFor(engine, mafiaId(engine));
+  expect(state(engine).phase).toBe("GAME_OVER");
+
+  const pub = engine.getPublicState();
+  expect(pub.winner).toBe("TOWN");
+  expect(pub.revealedRoles).toEqual(state(engine).roles);
+  expect(pub.elimination).toBeNull();
+  expect(pub.morningDeaths).toBeNull();
+
+  const live = mk({ seed: 1 });
+  openGame(live);
+  expect(live.getPublicState().revealedRoles).toBeNull();
+});
+
+test("narrator records night actions for the role holders with correct attribution", () => {
+  const engine = mk({ seed: 2 });
+  openGame(engine);
+  const acting = nightState(engine).actingMafiaId;
+  const doc = doctorId(engine);
+  const det = detectiveId(engine);
+  const villager = villagerId(engine);
+
+  const killResult = ok(engine, { type: "MAFIA_KILL", actor: NAR, targetId: villager });
+  expect(killResult.events.find((e) => e.type === "NIGHT_ACTION_RECORDED")?.playerId).toBe(acting);
+
+  const saveResult = ok(engine, { type: "DOCTOR_SAVE", actor: NAR, targetId: det });
+  expect(saveResult.events.find((e) => e.type === "NIGHT_ACTION_RECORDED")?.playerId).toBe(doc);
+
+  const invResult = ok(engine, { type: "DETECTIVE_INVESTIGATE", actor: NAR, targetId: doc });
+  expect(invResult.events.find((e) => e.type === "NIGHT_ACTION_RECORDED")?.playerId).toBe(det);
+
+  ok(engine, { type: "RESOLVE_NIGHT", actor: SYS });
+  expect(state(engine).lastResolvedNight?.investigatedTargetId).toBe(doc);
+});
+
+test("detective may investigate themselves; verdict is deterministically not-Mafia", () => {
+  const engine = mk({ seed: 1 });
+  openGame(engine);
+  const det = detectiveId(engine);
+  kill(engine, villagerId(engine));
+  save(engine, null);
+  investigate(engine, det);
+  ok(engine, { type: "RESOLVE_NIGHT", actor: SYS });
+  const own = engine.getPlayerState(det).ownPrivateNightResult;
+  expect(own?.kind).toBe("INVESTIGATION");
+  if (own?.kind === "INVESTIGATION") expect(own.isMafia).toBe(false);
+});
+
+test("mafia may target a mafia teammate (alive, not self)", () => {
+  const engine = mk({ seed: 8, players: ROSTER8 });
+  openGame(engine);
+  const [, m2] = roleIds(engine, "MAFIA") as [PlayerId, PlayerId];
+  const result = ok(engine, { type: "MAFIA_KILL", actor: SYS, targetId: m2 });
+  expect(result.success).toBe(true);
+  expect(nightState(engine).nightActions.kill.targetId).toBe(m2);
+});
+
+test("dead players are offered no actions in NIGHT or VOTING", () => {
+  const engine = mk({ seed: 1 });
+  openGame(engine);
+  const doc = doctorId(engine);
+  kill(engine, doc);
+  save(engine, null);
+  ok(engine, { type: "RESOLVE_NIGHT", actor: SYS });
+  passDay(engine);
+  ok(engine, { type: "ADVANCE_PHASE", actor: SYS }); // -> NIGHT 2
+  expect(state(engine).players.find((p) => p.id === doc)?.alive).toBe(false);
+  expect(engine.getPlayerState(doc).availableActions).toEqual([]);
+
+  ok(engine, { type: "ADVANCE_PHASE", actor: SYS }); // force night 2 -> MORNING
+  enterVotingFromMorning(engine);
+  expect(engine.getPlayerState(doc).availableActions).toEqual([]);
+});
+
+test("reconnecting clients get everything needed to resume from each phase", () => {
+  const engine = mk({ seed: 8, players: ROSTER8 });
+  startGame(engine);
+
+  const p1 = state(engine).players[0]?.id as PlayerId;
+  expect(engine.getPlayerState(p1).role).not.toBeNull();
+  expect(engine.getPlayerState(p1).roleSeen).toBe(false);
+
+  revealAll(engine);
+  const [m1] = roleIds(engine, "MAFIA") as [PlayerId];
+  const acting = nightState(engine).actingMafiaId;
+  expect(engine.getPlayerState(acting).availableActions).toContain("MAFIA_KILL");
+  const villager = villagerId(engine);
+  expect(engine.getPlayerState(villager).availableActions).toEqual([]);
+
+  kill(engine, villager);
+  save(engine, null);
+  investigate(engine, m1);
+  ok(engine, { type: "RESOLVE_NIGHT", actor: SYS });
+  expect(engine.getPublicState().morningDeaths).toEqual([villager]);
+  expect(engine.getPlayerState(detectiveId(engine)).ownPrivateNightResult?.kind).toBe(
+    "INVESTIGATION",
+  );
+
+  enterVotingFromMorning(engine);
+  expect(engine.getPublicState().voting).toEqual({ cast: 0, total: 7 });
+  const voter = detectiveId(engine);
+  const target = (state(engine).players.find((p) => p.alive && p.id !== voter)?.id ?? "p1") as PlayerId;
+  vote(engine, voter, target);
+  expect(engine.getPlayerState(voter).ownVoteTargetId).toBe(target);
+  expect(engine.getPlayerState(voter).availableActions).toEqual([]);
+
+  const narrator = engine.getNarratorState();
+  expect(narrator.votes?.[voter]).toBe(target);
+  expect(narrator.roles).toEqual(state(engine).roles);
+});
+
+test("hidden facts live only in events and narrator view, never in public state", () => {
+  const engine = mk({ seed: 1 });
+  for (const p of state(engine).players) {
+    ok(engine, { type: "READY", actor: SYS, playerId: p.id });
+  }
+  const result = ok(engine, { type: "START_GAME", actor: SYS });
+  expect(result.events.find((e) => e.type === "GAME_STARTED")).toHaveProperty("roles");
+  expect(engine.getPublicState().revealedRoles).toBeNull();
 });

@@ -5,10 +5,12 @@ the Mafia engine (`backend/src/games/mafia/`). It is the layer that the three
 presentation modes (pass-the-phone, own-mobile, narrator) share. Gameplay rules
 live in [`mafia-spec.md`](./mafia-spec.md), which this contract mirrors.
 
-Status: **Phase 10B — full engine implemented.** `dispatch` validates and
-applies every action; nights, votes, and win conditions are resolved; derived
-per-player views are filled. All 105 backend tests pass (`bun test`) and
-`tsc --noEmit` is clean. See the dev log in §12 for what changed since 10A.
+Status: **Phase 10C — pre-integration audit complete.** `dispatch` validates
+and applies every action; nights, votes, and win conditions are resolved;
+derived per-player views are filled; the public view additionally reveals the
+full role assignment at GAME_OVER (spec §8.5). Force-resolved nights now
+attribute `PLAYER_UNAVAILABLE` to each actually-pending player. All 113 backend
+tests pass (`bun test`) and `tsc --noEmit` is clean. Audit notes in §13.
 
 ---
 
@@ -80,7 +82,9 @@ object is ever handed out):
   Phase, night number, public players (id/name/alive/ready), `morningDeaths`,
   aggregate vote progress (`cast`/`total`, not who voted for whom), outcome of
   an elimination (id only — role is never revealed, spec 8.6), winner at
-  GAME_OVER. **No roles, no night inputs, no votes map, no verdicts.**
+  GAME_OVER, and at GAME_OVER only the full role assignment (`revealedRoles`,
+  spec 8.5 — roles are public precisely there and nowhere else). **No roles, no
+  night inputs, no votes map, no verdicts before the game ends.**
 - **Player private** (`MafiaPlayerState`, via `getPlayerState(id)`): one
   player's own role, readiness, role-seen, their own night slot, their own
   private night result (`INVESTIGATION` verdict or `HEAL` outcome), their own
@@ -232,14 +236,18 @@ draws.
   sensitive, never raw-broadcast (adapter routes it through the views).
 - **Night resolution**: the kill is mandatory (`RESOLVE_NIGHT` without a
   submitted/skipped kill → `MISSING_REQUIRED_ACTION`; `ADVANCE_PHASE`
-  force-resolves by marking pending slots `SKIPPED`, emitting
-  `PLAYER_UNAVAILABLE`). A submitted kill lands **unless** the Doctor is alive
-  and saved the exact target (`saveApplied`); a deliberate pass (`DOCTOR_SAVE
-  targetId=null`) clears the repeat guard. The Detective's verdict is
-  `role === "MAFIA"`. Death and win-precedence: Mafia eliminated → TOWN;
-  otherwise `mafia >= nonMafia` → MAFIA, checked at the two allowed moments.
+  force-resolves by marking pending slots `SKIPPED`, emitting one
+  `PLAYER_UNAVAILABLE` per pending slot's owner — kill → acting Mafia, save →
+  Doctor, investigate → Detective; already-submitted inputs are kept). A
+  submitted kill lands **unless** the Doctor is alive and saved the exact
+  target (`saveApplied`); a deliberate pass (`DOCTOR_SAVE targetId=null`)
+  clears the repeat guard. The Detective's verdict is `role === "MAFIA"`.
+  Death and win-precedence: Mafia eliminated → TOWN; otherwise
+  `mafia >= nonMafia` → MAFIA, checked at the two allowed moments.
 - **Acting Mafia**: the role holder carries over night to night while alive;
-  if dead it falls back to the first living Mafia by roster order.
+  if dead it falls back to the first living Mafia by roster order. By
+  carry-over this is always the roster-first *living* Mafia at the start of a
+  night, so the narrator's MAFIA_KILL is always attributed to `actingMafiaId`.
 - **Voting**: plurality eliminates the top vote-getter; a top-count tie or zero votes
   eliminates nobody (`tie` distinguishes them). Voting auto-ends (SYSTEM) once
   every living player has voted.
@@ -267,6 +275,41 @@ still accepts the action.
   aggregate-only publicity, ties, plurality, auto-end), win detection (town by
   vote, mafia by outnumbering), `ADVANCE_PHASE`/force-resolve, `PLAY_AGAIN`,
   `PLAYER_UNAVAILABLE`, derived `availableActions`/`ownPrivateNightResult`, and
-  the public/private/narrator information boundaries.
+  the public/private/narrator information boundaries. Phase 10C adds: per-slot
+  force-resolve attribution, GAME_OVER `revealedRoles`, narrator night-action
+  recording attribution, self-investigation, mafia team-kill legality, dead
+  players receiving no action prompts, per-phase reconnect/resume coverage, and
+  the events-vs-views hidden-info boundary.
 
 Run with `bun test`; typecheck with `bun run typecheck`.
+
+## 13. Phase 10C audit notes
+
+Pre-integration audit of the engine against `mafia-spec.md` (state machine,
+action authority, info security, reconnect, disconnects, ID mapping,
+determinism, edge cases). Findings and resolutions:
+
+- **GAME_OVER did not reveal every role.** Spec 8.5/7.2 require the full role
+  assignment to be public at game end. Added `MafiaPublicState.revealedRoles`,
+  `null` except at GAME_OVER where it equals `roles`. Private per-player views
+  and the narrator view were already complete. This is the one contract-shape
+  change; adapters should render public `revealedRoles` and the `winner` on the
+  end-of-game screen (the compact summary in spec 8.5 is the events/timeline
+  the adapter already broadcast, and `getNarratorState().timeline` for Mode C).
+- **Force-resolve mis-attributed `PLAYER_UNAVAILABLE`.** `ADVANCE_PHASE` in
+  NIGHT always reported the acting Mafia as timed out even when they had acted.
+  Now one event is emitted per genuinely-pending slot owner (acting Mafia,
+  Doctor, Detective as applicable); already-submitted inputs stay `SUBMITTED`.
+- **Verified, no change needed:** the acting Mafia is invariantly the
+  roster-first living Mafia (carry-over), so narrator/system recording of
+  MAFIA_KILL is always attributed correctly; self-vote is allowed (spec 8.3,
+  10); detective self-investigation is permitted and deterministically returns
+  "not Mafia" (spec is silent — engine does not invent a ban); Mafia may target
+  a Mafia teammate (spec forbids only self and dead targets); a disconnected
+  acting Mafia means "no kill" that night (spec 6.14/9.3); `PLAYER_UNAVAILABLE`
+  is a NIGHT-only choke-point and matches spec 6.14/9.3; rolls of `roles` are
+  the only use of randomness (`random` is the single injection point);
+  reconnecting clients can rebuild phase, role, role-seen, pending action,
+  private results, own vote, availability, deaths, and eliminations from the
+  three views (no second identity system; room player IDs map 1:1 to engine
+  player IDs).
