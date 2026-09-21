@@ -1,24 +1,6 @@
 <script lang="ts">
 	import GameGlyph from '$lib/components/games/GameGlyph.svelte';
-
-	const games = [
-		{
-			name: 'Mafia',
-			description: 'A social deduction game of secrets, suspicion and survival.'
-		},
-		{
-			name: 'Housie',
-			description: 'Classic housie, built for the whole room.'
-		},
-		{
-			name: 'Connect 4',
-			description: 'Four in a row. Two players. One winner.'
-		},
-		{
-			name: 'Tic Tac Toe',
-			description: 'The classic, without the paper.'
-		}
-	];
+	import { GAMES } from '$lib/games';
 </script>
 
 <svelte:head>
@@ -36,7 +18,7 @@
 	</div>
 
 	<ul class="mt-12 divide-y divide-border border-t border-border" aria-label="Games coming soon">
-		{#each games as game (game.name)}
+		{#each GAMES as game (game.name)}
 			<li
 				class="group grid grid-cols-1 gap-3 py-6 sm:grid-cols-[3rem_1fr_auto] sm:items-center sm:gap-x-8 sm:py-8"
 			>

@@ -1,31 +1,13 @@
 <script lang="ts">
+	import { GAMES } from '$lib/games';
 	import Button from '$lib/components/ui/Button.svelte';
-
-	const games = [
-		{
-			name: 'Mafia',
-			description: 'A social deduction game of secrets, suspicion and survival.'
-		},
-		{
-			name: 'Housie',
-			description: 'Classic housie, built for the whole room.'
-		},
-		{
-			name: 'Connect 4',
-			description: 'Four in a row. Two players. One winner.'
-		},
-		{
-			name: 'Tic Tac Toe',
-			description: 'The classic, without the paper.'
-		}
-	];
 </script>
 
 <svelte:head>
 	<title>PLAYROOM — Games for the whole room</title>
 	<meta
 		name="description"
-		content="PLAYROOM — Games for the whole room. Pick a game. Grab your friends. Play."
+		content="Play simple party games together. Join from your phone or pass one around."
 	/>
 </svelte:head>
 
@@ -51,17 +33,17 @@
 <section class="border-t border-border">
 	<div class="page-shell py-16 sm:py-24">
 		<div class="max-w-2xl">
-			<p class="eyebrow mb-4">Coming soon</p>
+			<p class="eyebrow mb-6">Coming soon</p>
 			<h2 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">The lineup</h2>
 		</div>
 		<ul class="mt-12 divide-y divide-border">
-			{#each games as game (game.name)}
+			{#each GAMES as game (game.name)}
 				<li
 					class="grid gap-2 py-6 sm:grid-cols-[minmax(0,10rem)_1fr_auto] sm:items-baseline sm:gap-6"
 				>
 					<h3 class="text-lg font-semibold tracking-tight sm:text-xl">{game.name}</h3>
 					<p class="leading-relaxed text-muted">{game.description}</p>
-					<p class="text-sm text-faint">Coming soon</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Coming soon</p>
 				</li>
 			{/each}
 		</ul>

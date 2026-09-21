@@ -34,7 +34,7 @@
 	<div class="max-w-md">
 		<p class="eyebrow mb-6">Player</p>
 		<h1 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Join a room</h1>
-		<p class="mt-4 text-lg leading-relaxed text-muted">
+		<p class="mt-5 text-lg leading-relaxed text-muted">
 			Type in the code your host shared and we'll take it from there.
 		</p>
 

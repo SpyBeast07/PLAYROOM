@@ -1,25 +1,7 @@
 <script lang="ts">
 	import GameGlyph from '$lib/components/games/GameGlyph.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-
-	const games = [
-		{
-			name: 'Mafia',
-			description: 'A social deduction game of secrets, suspicion and survival.'
-		},
-		{
-			name: 'Housie',
-			description: 'Classic housie, built for the whole room.'
-		},
-		{
-			name: 'Connect 4',
-			description: 'Four in a row. Two players. One winner.'
-		},
-		{
-			name: 'Tic Tac Toe',
-			description: 'The classic, without the paper.'
-		}
-	];
+	import { GAMES } from '$lib/games';
 
 	let selectedGame = $state('');
 </script>
@@ -33,7 +15,7 @@
 	<div class="max-w-2xl">
 		<p class="eyebrow mb-6">Host</p>
 		<h1 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Create a room</h1>
-		<p class="mt-4 text-lg leading-relaxed text-muted">
+		<p class="mt-5 text-lg leading-relaxed text-muted">
 			Pick a game to start your room. Every game is still in the workshop, so rooms can't open just
 			yet.
 		</p>
@@ -41,7 +23,7 @@
 		<fieldset class="mt-12">
 			<legend class="text-lg font-semibold tracking-tight">Choose a game</legend>
 			<ul class="mt-6 divide-y divide-border border-t border-border">
-				{#each games as game (game.name)}
+				{#each GAMES as game (game.name)}
 					<li>
 						<label
 							class="group grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-4 rounded-md px-1.5 py-3.5 transition-colors hover:bg-surface has-checked:bg-surface"
