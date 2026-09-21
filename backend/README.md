@@ -17,6 +17,14 @@ bun run dev
 The dev server uses Bun's `--hot` flag, so files are reloaded automatically on change.
 A plain (non-watch) start is available via `bun run start`.
 
+## Run tests
+
+```bash
+bun run test
+```
+
+Tests use Bun's native test runner and spin up real HTTP + WebSocket servers on ephemeral ports.
+
 ## Development port
 
 Defaults to **3000**. Override with the `PORT` environment variable:
@@ -144,6 +152,91 @@ Errors return consistent JSON with an appropriate status code:
 `400` invalid request body / invalid player name, `404` room or player not found,
 `409` room full or room already started.
 
+## WebSocket endpoint
+
+Rooms can be subscribed to for real-time room updates.
+
+### Connect
+
+```text
+/ws/rooms/:code?playerId=<playerId>
+```
+
+The `playerId` is the opaque ID returned by `POST /rooms/:code/players`. The connection is
+rejected (HTTP error) if the `playerId` query parameter is missing, the room does not exist,
+or the player does not belong to the room.
+
+```bash
+# example client (browser or any WebSocket client)
+wscat -c "ws://localhost:3000/ws/rooms/A7K9P2?playerId=<playerId>"
+```
+
+### Connection lifecycle
+
+On a successful connection, the server immediately sends:
+
+1. `connected` with the player's ID
+2. `room.updated` with the current public room state
+
+```json
+{ "type": "connected", "playerId": "abc123" }
+```
+
+```json
+{
+  "type": "room.updated",
+  "room": {
+    "code": "A7K9P2",
+    "status": "waiting",
+    "players": [{ "id": "abc123", "name": "Alice", "isHost": true }],
+    "createdAt": 1750000000000
+  }
+}
+```
+
+### Server → client messages
+
+```ts
+type ServerMessage =
+  | { type: "connected"; playerId: string }
+  | { type: "room.updated"; room: PublicRoom }
+  | { type: "pong" }
+  | { type: "error"; code: string; message: string };
+```
+
+### Client → server messages
+
+```ts
+type ClientMessage = { type: "ping" };
+```
+
+`ping` is answered with `pong`. The connection stays open.
+
+Malformed JSON is answered with `{ "type": "error", "code": "INVALID_MESSAGE", ... }`.
+Valid JSON with an unsupported `type` is answered with
+`{ "type": "error", "code": "UNKNOWN_MESSAGE_TYPE", ... }`. Invalid messages do not close the
+connection.
+
+### Room update behavior
+
+Whenever a player joins (`POST /rooms/:code/players`) or leaves
+(`DELETE /rooms/:code/players/:playerId`) an existing room through the HTTP API, the server
+broadcasts `room.updated` (the public room state via `toPublicRoom`) to every connected
+client in that room. The internal room object, internal room ID, and `joinedAt` are never sent.
+
+### Disconnect vs leaving
+
+Closing a WebSocket only removes that **connection**. The **player remains in the room**.
+A network disconnect is not a room leave: future reconnection reuses the same `playerId`.
+The explicit room-leave operation is `DELETE /rooms/:code/players/:playerId`. If a leaving
+player still has an open WebSocket, the server closes that connection. Rooms are not
+preserved when the last player leaves.
+
+### Reconnection
+
+Reconnecting with the same `playerId` establishes a fresh association with the same
+room/player and replays `connected` + `room.updated`. There is no session system yet.
+
 ## CORS
 
 Development CORS allows requests from `http://localhost:5173` (the SvelteKit dev server)
@@ -161,32 +254,45 @@ bun run typecheck
 
 ## Current scope
 
-The backend exposes `/health` and the in-memory room API, and is structured as:
+The backend exposes `/health`, the in-memory room API, and a WebSocket endpoint that
+broadcasts room-level updates. It is structured as:
 
 ```
 src/
-├── index.ts           # server entry point (port config, Bun.serve)
-├── app.ts             # Hono application (middleware, routes)
+├── index.ts              # server entry point (port config, Bun.serve + websocket)
+├── app.ts                # Hono application (middleware, routes, wiring)
 ├── routes/
-│   ├── health.ts      # GET /health
-│   └── rooms.ts       # in-memory room endpoints
-└── rooms/
-    ├── types.ts       # Room / Player types + public-state mappers
-    └── room-manager.ts # in-memory RoomManager (no HTTP concerns)
+│   ├── health.ts         # GET /health
+│   └── rooms.ts          # in-memory room endpoints (creates/broadcasts)
+├── rooms/
+│   ├── types.ts          # Room / Player types + public-state mappers
+│   └── room-manager.ts   # in-memory RoomManager (domain, transport-agnostic)
+└── realtime/
+    ├── types.ts          # WebSocket message types + Connection model
+    ├── connection-manager.ts  # active connections, room broadcasts (owns no room state)
+    └── ws.ts             # /ws/rooms/:code upgrade + client message handling
 ```
+
+`RoomManager` remains the single source of truth for room membership. The WebSocket layer
+only tracks *connections*; it never stores its own copy of players.
 
 ## Not implemented yet
 
-WebSockets, Mafia (game engine and rules), game state, authentication, database /
-persistence, chat, matchmaking, and accounts are intentionally **not** implemented yet.
+Mafia (game engine and rules), Mafia/game state, game events, ready/start game, chat,
+authentication, database / persistence, matchmaking, accounts, and narrator/pass-the-phone
+modes are intentionally **not** implemented yet.
 
 Current limitations:
 
-- Rooms live only in memory and are gone after a backend restart.
+- Rooms and connections live only in memory and are gone after a backend restart.
+- WebSockets currently only synchronize **room/lobby state** (`room.updated`). Game/Mafia
+  events are not implemented yet, and there is no protocol for game messages.
 - There is no way to transition a room from `waiting` to `playing` yet; the model is
   structured to allow it in a future phase.
 - The host is only a lobby concept (join/host-transfer) and is **not** authoritative over any
   future game state.
-- No player reconnection, since there is no transport/connection layer yet.
+- No session/authentication system: the `playerId` query parameter is enough to associate a
+  connection, and duplicate connections per player are allowed.
+- No heartbeat / reconnection tokens / persistent sessions yet.
 
 The Mafia rules live only in `docs/mafia-spec.md` at this stage.

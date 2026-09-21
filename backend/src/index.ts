@@ -1,3 +1,4 @@
+import { websocket } from "hono/bun";
 import { createApp } from "./app.ts";
 
 const port = Number(Bun.env.PORT ?? 3000);
@@ -8,4 +9,5 @@ console.log(`PLAYROOM backend listening on http://localhost:${port}`);
 export default {
   port,
   fetch: app.fetch,
+  websocket,
 };
