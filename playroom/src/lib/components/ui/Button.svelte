@@ -34,7 +34,7 @@
 
 	const classes = $derived.by(
 		() =>
-			`inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors active:scale-[0.99] ${variants[variant]} ${sizes[size]} ${className}`
+			`inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors active:scale-[0.99] disabled:pointer-events-none disabled:opacity-55 ${variants[variant]} ${sizes[size]} ${className}`
 	);
 </script>
 
