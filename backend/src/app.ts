@@ -7,7 +7,10 @@ import { createWsRouter } from "./realtime/ws.ts";
 import { RoomManager } from "./rooms/room-manager.ts";
 import { MafiaSessionManager } from "./games/mafia/mafia-session.ts";
 
-const DEFAULT_CORS_ORIGINS = ["http://localhost:5173"];
+const DEFAULT_CORS_ORIGINS = [
+  "http://localhost:5173",
+  "https://playroom-chi.vercel.app",
+];
 
 export function createApp() {
   const app = new Hono();
@@ -25,7 +28,17 @@ export function createApp() {
       origin: (origin) => {
         if (!origin) return null;
         const normalized = origin.trim().replace(/\/+$/, "");
-        return corsOrigins.includes(normalized) ? origin : null;
+        const isAllowed = corsOrigins.some((allowed) => {
+          const target = allowed.trim().replace(/\/+$/, "");
+          if (target === normalized) return true;
+          if (target.startsWith("https://*.") || target.startsWith("http://*.")) {
+            const suffix = target.slice(target.indexOf("*.") + 1);
+            const proto = target.slice(0, target.indexOf("*"));
+            return normalized.startsWith(proto) && normalized.endsWith(suffix);
+          }
+          return false;
+        });
+        return isAllowed ? origin : null;
       },
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     }),
