@@ -9,7 +9,8 @@
 const DEFAULT_BACKEND_URL = 'http://localhost:3000';
 
 export function backendBase(): string {
-	const fromEnv = import.meta.env.MAFIA_BACKEND_URL as string | undefined;
+	const env = import.meta.env as Record<string, string | undefined>;
+	const fromEnv = env.MAFIA_BACKEND_URL;
 	return (fromEnv ?? DEFAULT_BACKEND_URL).replace(/\/+$/, '');
 }
 

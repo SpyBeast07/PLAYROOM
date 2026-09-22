@@ -48,6 +48,12 @@ export function createApp() {
   const connections = new ConnectionManager();
   const mafiaSessions = new MafiaSessionManager(roomManager);
 
+  app.get("/", (c) =>
+    c.json({
+      status: "ok",
+      service: "playroom-backend",
+    }),
+  );
   app.route("/health", health);
   app.route("/rooms", createRoomRouter(roomManager, connections));
   app.route("/ws", createWsRouter(roomManager, connections, mafiaSessions));
