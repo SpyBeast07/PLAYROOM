@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { GAMES } from '$lib/games';
 	import Button from '$lib/components/ui/Button.svelte';
 </script>
@@ -33,7 +34,7 @@
 <section class="border-t border-border">
 	<div class="page-shell py-16 sm:py-24">
 		<div class="max-w-2xl">
-			<p class="eyebrow mb-6">Coming soon</p>
+			<p class="eyebrow mb-6">Playable now</p>
 			<h2 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">The lineup</h2>
 		</div>
 		<ul class="mt-12 divide-y divide-border">
@@ -43,7 +44,16 @@
 				>
 					<h3 class="text-lg font-semibold tracking-tight sm:text-xl">{game.name}</h3>
 					<p class="leading-relaxed text-muted">{game.description}</p>
-					<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Coming soon</p>
+					{#if game.name === 'Mafia'}
+						<a
+							href={resolve('/create')}
+							class="text-sm font-semibold text-accent transition-colors hover:text-accent-strong"
+						>
+							Play now
+						</a>
+					{:else}
+						<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Coming soon</p>
+					{/if}
 				</li>
 			{/each}
 		</ul>

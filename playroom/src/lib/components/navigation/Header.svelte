@@ -1,10 +1,9 @@
 <script lang="ts">
-	import type { RouteId } from '$app/types';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import Logo from '$lib/components/navigation/Logo.svelte';
 
-	const navLinks: { href: RouteId; label: string }[] = [
+	const navLinks: { href: '/games' | '/about'; label: string }[] = [
 		{ href: '/games', label: 'Games' },
 		{ href: '/about', label: 'About' }
 	];

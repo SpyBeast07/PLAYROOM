@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/ui/Button.svelte';
 	import GameGlyph from '$lib/components/games/GameGlyph.svelte';
 	import { GAMES } from '$lib/games';
 </script>
@@ -13,11 +14,12 @@
 		<p class="eyebrow mb-6">Catalog</p>
 		<h1 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Games</h1>
 		<p class="mt-5 text-lg leading-relaxed text-muted">
-			The first four games for PLAYROOM. All of them are in the workshop — nothing to play just yet.
+			Mafia is ready to play with the whole room — everyone on their own phone. The rest are still
+			in the workshop.
 		</p>
 	</div>
 
-	<ul class="mt-12 divide-y divide-border border-t border-border" aria-label="Games coming soon">
+	<ul class="mt-12 divide-y divide-border border-t border-border">
 		{#each GAMES as game (game.name)}
 			<li
 				class="group grid grid-cols-1 gap-3 py-6 sm:grid-cols-[3rem_1fr_auto] sm:items-center sm:gap-x-8 sm:py-8"
@@ -27,7 +29,14 @@
 					<h2 class="text-xl font-semibold tracking-tight sm:text-2xl">{game.name}</h2>
 					<p class="mt-1.5 max-w-xl leading-relaxed text-muted">{game.description}</p>
 				</div>
-				<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Coming soon</p>
+				{#if game.name === 'Mafia'}
+					<div class="flex gap-2">
+						<Button href="/create" variant="secondary">Create</Button>
+						<Button href="/join" variant="secondary">Join</Button>
+					</div>
+				{:else}
+					<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Coming soon</p>
+				{/if}
 			</li>
 		{/each}
 	</ul>

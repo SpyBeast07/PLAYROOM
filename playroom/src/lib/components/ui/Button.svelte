@@ -1,9 +1,17 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { RouteId } from '$app/types';
+	import type { RouteId, RouteParams } from '$app/types';
 	import type { Snippet } from 'svelte';
 
 	type Variant = 'primary' | 'secondary' | 'ghost';
+
+	type FlatRoute = RouteId extends infer R
+		? R extends RouteId
+			? RouteParams<R> extends Record<string, never>
+				? R
+				: never
+			: never
+		: never;
 
 	let {
 		href,
@@ -39,7 +47,7 @@
 </script>
 
 {#if href}
-	<a href={resolve(href)} class={classes} {...rest}>{@render children()}</a>
+	<a href={resolve(href as FlatRoute)} class={classes} {...rest}>{@render children()}</a>
 {:else}
 	<button class={classes} {...rest}>{@render children()}</button>
 {/if}

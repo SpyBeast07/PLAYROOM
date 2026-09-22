@@ -1,8 +1,7 @@
 <script lang="ts">
-	import type { RouteId } from '$app/types';
 	import { resolve } from '$app/paths';
 
-	const links: { href: RouteId; label: string }[] = [
+	const links: { href: '/games' | '/create' | '/join' | '/about'; label: string }[] = [
 		{ href: '/games', label: 'Games' },
 		{ href: '/create', label: 'Create a room' },
 		{ href: '/join', label: 'Join a room' },
