@@ -228,7 +228,11 @@ export class MafiaStore {
 	ready(): void {
 		const identity = this.identity;
 		if (!identity) return;
-		this.send(this.myReady ? { type: 'UNREADY', playerId: identity.playerId } : { type: 'READY', playerId: identity.playerId });
+		this.send(
+			this.myReady
+				? { type: 'UNREADY', playerId: identity.playerId }
+				: { type: 'READY', playerId: identity.playerId }
+		);
 	}
 
 	reportRoleSeen(): void {
