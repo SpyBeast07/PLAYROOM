@@ -108,6 +108,35 @@ export class WsClient {
     return this.queue.splice(0);
   }
 
+  /**
+   * Rendezvous with the socket handshake: wait until a message of `type` has
+   * been received (waiting for further messages only as needed), then restore
+   * everything collected back onto the queue in wire order. A drain() issued
+   * afterwards is therefore guaranteed to contain the complete handshake —
+   * including any messages still in flight when the barrier resolved.
+   */
+  async awaitSync(type: string, timeoutMs = 2000): Promise<void> {
+    const collected: WsMsg[] = [];
+    for (;;) {
+      const queued = this.queue.shift();
+      const msg =
+        queued !== undefined
+          ? queued
+          : await new Promise<WsMsg>((resolve, reject) => {
+              this.waiter = resolve;
+              setTimeout(() => {
+                if (this.waiter) {
+                  this.waiter = null;
+                  reject(new Error(`Timed out waiting for WebSocket message "${type}"`));
+                }
+              }, timeoutMs);
+            });
+      collected.push(msg);
+      if (msg.type === type) break;
+    }
+    this.queue.unshift(...collected);
+  }
+
   send(message: unknown): void {
     this.ws.send(JSON.stringify(message));
   }
