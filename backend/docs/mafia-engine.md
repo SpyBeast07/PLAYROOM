@@ -5,15 +5,18 @@ the Mafia engine (`backend/src/games/mafia/`). It is the layer that the three
 presentation modes (pass-the-phone, own-mobile, narrator) share. Gameplay rules
 live in [`mafia-spec.md`](./mafia-spec.md), which this contract mirrors.
 
-Status: **Phase 11A — session layer bound.** `dispatch` validates
+Status: **Phase 12 — pass-the-phone (Mode A) adapter.** `dispatch` validates
 and applies every action; nights, votes, and win conditions are resolved;
 derived per-player views are filled; the public view additionally reveals the
 full role assignment at GAME_OVER (spec §8.5). Force-resolved nights now
-attribute `PLAYER_UNAVAILABLE` to each actually-pending player. The room →
-engine adapter (`mafia-session.ts`) owns one game per room, identical player
-ids, lobby-only roster reconciliation, and the room's single lock state. All
-141 backend tests pass (`bun test`) and `tsc --noEmit` is clean. Audit notes in
-§13; session contract in §14.
+attribute `PLAYER_UNAVAILABLE` to each actually-pending player. `PassPhoneController`
+(`src/games/mafia/adapters/pass-phone/`) drives a strictly local shared-device
+game on top of this engine: it dispatches everything as NARRATOR, reads only
+`getPublicState()`/`getPlayerState()`, and owns only the phone-passing
+interaction state (current player + handoff/reveal step), the roster add/remove,
+and id minting — never the rules. All 209 backend tests pass (`bun test`) and
+`tsc --noEmit` is clean. Mode A contract in §16; audit notes in §13; session
+contract in §14.
 
 ---
 
@@ -283,6 +286,12 @@ still accepts the action.
   recording attribution, self-investigation, mafia team-kill legality, dead
   players receiving no action prompts, per-phase reconnect/resume coverage, and
   the events-vs-views hidden-info boundary.
+- `src/games/mafia/adapters/pass-phone/pass-phone-controller.test.ts` — Phase 12
+  Mode A adapter: lobby/roster lifecycle, role-reveal flow, night action flow
+  (target rejection, doctor repeat guard, `endNightNow` force-resolve), voting
+  flow (one voter at a time, final-vote auto-end, `endVoting` seal), full games
+  to GAME_OVER for both winners, play-again/reset, and a hidden-information
+  audit that walks every reachable view and forbids engine-internal fields.
 
 Run with `bun test`; typecheck with `bun run typecheck`.
 
@@ -447,3 +456,51 @@ Tests: `src/games/mafia/mafia-protocol.test.ts` covers the wire contract end to
 end (handshake, broadcast boundaries, action enforcement, information security /
 need-to-know, reconnect, disconnect/SKIPPED, multi-socket, and room isolation)
 against `src/test-server.ts`.
+
+## 16. Phase 12 pass-the-phone (Mode A) adapter contract
+
+`PassPhoneController` (`src/games/mafia/adapters/pass-phone/`) is the Mode A
+adapter (spec §2.1): one shared device, one phone. The engine stays the single
+authority — the adapter adds no rules of its own.
+
+- **Boundary.** The adapter reads only `getPublicState()` and
+  `getPlayerState(id)`; it never reads `getState()`, `getNarratorState()`, or
+  any engine-internal field (the test suite audits every reachable view against
+  a forbidden-keys list). It owns exactly: the roster (engine `JOIN`/`LEAVE` in
+  LOBBY), id minting (`p1…`, `createId` seam for tests), and the phone-passing
+  interaction state (current player + `HANDOFF`→`REVEAL` step). Alive/dead,
+  roles, kills, saves, investigations, votes, eliminations, and winners come
+  from the engine.
+- **Authority.** Every dispatch uses `actor: NARRATOR`: the device is the Mode A
+  advance authority, and the engine records each holder's choice on their
+  behalf (the engine's NARRATOR path attributes the record to the real
+  role-holder). `READY`/`START_GAME`/`PLAY_AGAIN` likewise run as NARRATOR.
+- **Views** (`types.ts`): `SETUP` (roster, can-start), `ROLE_HANDOFF` /
+  `ROLE_REVEAL` (per-player pass; the handler's own name and role,
+  engine `getPlayerState`), `NIGHT_HANDOFF` (role only — never a player id or
+  name, so the group can't out the holder), `SECRET_ACTION` (the holder's own
+  role + `action` + living candidates), `MORNING` (deaths: names only),
+  `DISCUSSION`, `VOTE_HANDOFF` / `VOTE` (living candidates), `VOTE_RESULT`,
+  `GAME_OVER` (engine winner + `revealedRoles`).
+- **Advance.** `getView()`/transitions resolve NIGHT automatically when every
+  night actor has acted (engine `RESOLVE_NIGHT`, NARRATOR); otherwise the
+  device walks the handoff. Day flow is explicit taps: morning → discussion →
+  voting → result → next night (`continueAfterResult`). `endNightNow()` and
+  `endVoting()` are device escape hatches that force-resolve (engine
+  `ADVANCE_PHASE`/`END_VOTING`).
+- **Day-night ordering** (Mafia → Doctor → Detective) comes from the engine's
+  `availableActions` plus `NIGHT_ACTION_ORDER`; the night card's legal targets
+  come from `candidatesFor` (living players, and the Mafia may not kill
+  themselves); the engine remains the judge.
+- **Secrets.** `secureClear()` nulls the on-screen secret at any time (e.g. app
+  blur). No view ever carries engine-internal state (`roles`, `votes`,
+  `nightActions`, `actingMafiaId`, `roleSeen`, `readyState`,
+  `lastResolvedNight`, `lastElimination`, `timeline`).
+- **Determinism.** Randomness is injected (`createMafiaGame({ random })`), so
+  integration tests replay the same deal while still learning roles only through
+  the reveal screens, never from the engine.
+
+Tests: `src/games/mafia/adapters/pass-phone/pass-phone-controller.test.ts`
+exercises the adapter exactly as a UI would — read `getView()`, confirm the
+handoff, perform the action, follow the engine — across 27 cases (roster,
+reveal, night, voting, both winners, replay/reset, secret-leak audit).
