@@ -182,7 +182,7 @@ docker logs -f playroom-backend
 In the SvelteKit frontend (`playroom`), set the environment variable pointing to the production tunnel:
 
 ```env
-VITE_MAFIA_BACKEND_URL=https://playroom.kushagraguptaco.in
+MAFIA_BACKEND_URL=https://playroom.kushagraguptaco.in
 ```
 
 The frontend client will automatically use `https://playroom.kushagraguptaco.in` for REST requests and `wss://playroom.kushagraguptaco.in/ws/rooms/...` for WebSockets.

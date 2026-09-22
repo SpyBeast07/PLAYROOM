@@ -3,13 +3,13 @@
  *
  * The backend is a separate Bun + Hono process that defaults to
  * `http://localhost:3000` (see backend/README.md). Point the frontend at a
- * different origin with `VITE_MAFIA_BACKEND_URL`.
+ * different origin with `MAFIA_BACKEND_URL`.
  */
 
 const DEFAULT_BACKEND_URL = 'http://localhost:3000';
 
 export function backendBase(): string {
-	const fromEnv = import.meta.env.VITE_MAFIA_BACKEND_URL as string | undefined;
+	const fromEnv = import.meta.env.MAFIA_BACKEND_URL as string | undefined;
 	return (fromEnv ?? DEFAULT_BACKEND_URL).replace(/\/+$/, '');
 }
 
