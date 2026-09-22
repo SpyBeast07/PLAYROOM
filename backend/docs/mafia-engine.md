@@ -5,18 +5,18 @@ the Mafia engine (`backend/src/games/mafia/`). It is the layer that the three
 presentation modes (pass-the-phone, own-mobile, narrator) share. Gameplay rules
 live in [`mafia-spec.md`](./mafia-spec.md), which this contract mirrors.
 
-Status: **Phase 12 — pass-the-phone (Mode A) adapter.** `dispatch` validates
+Status: **Phase 13 — narrator (Mode C) adapter.** `dispatch` validates
 and applies every action; nights, votes, and win conditions are resolved;
 derived per-player views are filled; the public view additionally reveals the
 full role assignment at GAME_OVER (spec §8.5). Force-resolved nights now
-attribute `PLAYER_UNAVAILABLE` to each actually-pending player. `PassPhoneController`
-(`src/games/mafia/adapters/pass-phone/`) drives a strictly local shared-device
-game on top of this engine: it dispatches everything as NARRATOR, reads only
-`getPublicState()`/`getPlayerState()`, and owns only the phone-passing
-interaction state (current player + handoff/reveal step), the roster add/remove,
-and id minting — never the rules. All 209 backend tests pass (`bun test`) and
-`tsc --noEmit` is clean. Mode A contract in §16; audit notes in §13; session
-contract in §14.
+attribute `PLAYER_UNAVAILABLE` to each actually-pending player. `NarratorController`
+(`src/games/mafia/adapters/narrator/`) drives a physical game from one
+privileged device: it records players' spoken night actions and votes as
+`NARRATOR`, reads only `getNarratorState()` (never raw state), and owns no rules
+or handoff choreography. Its state is intentionally privileged and remains
+local-only — nothing in it reaches the multiplayer player channels. All 230
+backend tests pass (`bun test`) and `tsc --noEmit` is clean. Mode C contract in
+§17; Mode A in §16; audit notes in §13; session contract in §14.
 
 ---
 
@@ -292,6 +292,13 @@ still accepts the action.
   flow (one voter at a time, final-vote auto-end, `endVoting` seal), full games
   to GAME_OVER for both winners, play-again/reset, and a hidden-information
   audit that walks every reachable view and forbids engine-internal fields.
+- `src/games/mafia/adapters/narrator/narrator-controller.test.ts` — Phase 13
+  Mode C adapter: lobby/start and the reveal screen, begin-night, recorded night
+  actions (kill/save-pass/investigate, dead/self/unknown targets, no-living-role
+  holder, resolve-without-kill), morning outcome + verdict, discussion/voting
+  phase guards, recorded spoken votes (auto-end, dead/unknown/duplicate voters,
+  tie, sealed partial round), full games to GAME_OVER for both winners with the
+  full reveal, and play-again/reset.
 
 Run with `bun test`; typecheck with `bun run typecheck`.
 
@@ -504,3 +511,48 @@ Tests: `src/games/mafia/adapters/pass-phone/pass-phone-controller.test.ts`
 exercises the adapter exactly as a UI would — read `getView()`, confirm the
 handoff, perform the action, follow the engine — across 27 cases (roster,
 reveal, night, voting, both winners, replay/reset, secret-leak audit).
+
+## 17. Phase 13 narrator (Mode C) adapter contract
+
+`NarratorController` (`src/games/mafia/adapters/narrator/`) is the Mode C
+adapter (spec §2.3): one narrator device, players participate physically with no
+phones. The engine stays the single authority — the adapter adds no rules of its
+own.
+
+- **Boundary.** The adapter reads only `getNarratorState()` (the engine's
+  privileged view: roles, ready/role-seen, acting Mafia, night inputs, resolved
+  night, votes, elimination, timeline). It never reads `getState()` and it owns
+  exactly two things: the roster (engine `JOIN`/`LEAVE` in LOBBY) and id minting
+  (`p1…`, `createId` seam). Alive/dead, roles, acting-Mafia selection, night
+  math, verdicts, votes, eliminations, and winners all come from the engine.
+- **Authority.** Every dispatch uses `actor: NARRATOR`. The engine records a
+  player's *spoken* night choice or vote on their behalf (`MAFIA_KILL`,
+  `DOCTOR_SAVE` with `null` = deliberate pass, `DETECTIVE_INVESTIGATE`, and
+  `CAST_VOTE` with an explicit `voterId`) while keeping target/life checks.
+  Lobby control (READY/START_GAME/PLAY_AGAIN) and the role-reveal→night
+  transition (`BEGIN_NIGHT`) are also NARRATOR.
+- **Views** (`types.ts`), all derived from `getNarratorState()` with names
+  resolved so the UI reads people by name: `LOBBY` (roster + ready + can-start),
+  `ROLE_REVEAL` (every player's dealt role to tell them), `NIGHT` (acting Mafia
+  + the kill/save/investigate slots with their recorded status/targets),
+  `MORNING` (deaths + the Detective's verdict), `DISCUSSION`,
+  `VOTING` (recorded tally + who still owes a spoken vote), `VOTE_RESULT`
+  (elimination/tie), `GAME_OVER` (winner + full role reveal, spec §8.5).
+- **Advance.** Explicit taps: `beginNight`, `startDiscussion`, `startVoting`,
+  `endVoting`, `resolveNight` (normal, kill required), and the generic
+  `advancePhase()` meta-button (engine `ADVANCE_PHASE`: MORNING→DISCUSSION,
+  DISCUSSION→VOTING, VOTING→VOTE_RESULT, VOTE_RESULT→NIGHT,
+  ROLE_REVEAL→NIGHT, and NIGHT→force-resolution of still-pending slots).
+- **Replay.** `playAgain()` keeps the roster on a fresh deal; `resetGame()`
+  starts a completely empty lobby.
+- **Security.** Narrator state is privileged by definition and this adapter is
+  **local-only**: it imports nothing from the session/protocol/room layers and
+  nothing from those layers imports it. Its views must never be routed through
+  Mode B player messages.
+
+Tests: `src/games/mafia/adapters/narrator/narrator-controller.test.ts`
+exercises the adapter as a narrator UI would — read the screen, record the
+spoken action, resolve, advance — across 21 cases (lobby/start, reveal + first
+night, recorded night actions incl. rejected targets, morning + verdict,
+recorded voting incl. auto-end/tie/guards, both winner paths to GAME_OVER, and
+replay/reset).
