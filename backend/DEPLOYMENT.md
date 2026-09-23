@@ -13,7 +13,7 @@ The backend accepts the following environment variables:
 | `PORT` | `3000` (local) / `8787` (Docker) | Port the internal Bun process listens on | No |
 | `HOST` | `0.0.0.0` | Host interface to bind to (`0.0.0.0` allows container/network traffic) | No |
 | `HOST_PORT` | `18787` | Port on the VPS host mapped to container port `8787` via Docker Compose | No |
-| `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated list of allowed frontend origins (e.g. `http://localhost:5173,https://playroom-chi.vercel.app`) | No |
+| `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated list of allowed frontend origins (e.g. `http://localhost:5173,https://playrooms.kushagragupta.co.in`) | No |
 | `NODE_ENV` | `production` | Environment mode (`production` or `development`) | No |
 
 > **Security Note:** While current configuration variables are non-sensitive, never commit any `.env` file containing tokens, private keys, Cloudflare Tunnel credentials, or database passwords. `.gitignore` is configured to ignore all `.env` and `.env.*` files except `.env.example`.
@@ -23,7 +23,7 @@ The backend accepts the following environment variables:
 ## 2. Architecture & Traffic Flow
 
 ```text
-Vercel Frontend (https://playroom-chi.vercel.app)
+Vercel Frontend (https://playrooms.kushagragupta.co.in)
        │
        ▼ (HTTPS / WSS API & WebSockets)
 Custom Domain (https://playroom.kushagraguptaco.in)
@@ -81,7 +81,7 @@ docker run -d \
   -p 18787:8787 \
   -e PORT=8787 \
   -e HOST=0.0.0.0 \
-  -e CORS_ORIGINS="http://localhost:5173,https://playroom-chi.vercel.app" \
+  -e CORS_ORIGINS="http://localhost:5173,https://playrooms.kushagragupta.co.in" \
   playroom-backend
 ```
 
@@ -106,7 +106,7 @@ PORT=8787
 HOST=0.0.0.0
 HOST_PORT=18787
 NODE_ENV=production
-CORS_ORIGINS=http://localhost:5173,https://playroom-chi.vercel.app
+CORS_ORIGINS=http://localhost:5173,https://playrooms.kushagragupta.co.in
 ```
 
 ### Step 3: Start the Backend Service

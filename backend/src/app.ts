@@ -11,7 +11,7 @@ import { MafiaSessionManager } from "./games/mafia/mafia-session.ts";
 
 const DEFAULT_CORS_ORIGINS = [
   "http://localhost:5173",
-  "https://playroom-chi.vercel.app",
+  "https://playrooms.kushagragupta.co.in",
 ];
 
 export function createApp() {
