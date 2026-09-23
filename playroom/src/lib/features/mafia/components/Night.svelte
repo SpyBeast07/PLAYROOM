@@ -2,10 +2,12 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import type { MafiaStore } from '$lib/features/mafia/multiplayer/mafia-store.svelte';
 	import PhaseShell from './PhaseShell.svelte';
+	import PlayerList from './PlayerList.svelte';
 	import TargetList from './TargetList.svelte';
 
 	let { store }: { store: MafiaStore } = $props();
 
+	const hostId = $derived(store.room?.players.find((player) => player.isHost)?.id ?? null);
 	const canKill = $derived(store.can('MAFIA_KILL'));
 	const canSave = $derived(store.can('DOCTOR_SAVE'));
 	const canInvestigate = $derived(store.can('DETECTIVE_INVESTIGATE'));
@@ -29,6 +31,10 @@
 					: 'You cannot act tonight. Stay quiet and wait for morning.'
 		: "You're out of the game. Wait quietly through the night."}
 >
+	<div class="max-w-2xl">
+		<PlayerList players={store.players} meId={store.identity?.playerId ?? null} {hostId} />
+	</div>
+
 	{#if store.myAlive && acting && !acted}
 		<div class="max-w-2xl">
 			{#if canSave}

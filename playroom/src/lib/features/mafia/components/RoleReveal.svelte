@@ -2,11 +2,13 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import type { MafiaStore } from '$lib/features/mafia/multiplayer/mafia-store.svelte';
 	import PhaseShell from './PhaseShell.svelte';
+	import PlayerList from './PlayerList.svelte';
 
 	let { store }: { store: MafiaStore } = $props();
 
 	const role = $derived(store.myRole);
 	const seen = $derived(store.privateState?.roleSeen ?? false);
+	const hostId = $derived(store.room?.players.find((player) => player.isHost)?.id ?? null);
 </script>
 
 <PhaseShell
@@ -34,6 +36,10 @@
 				I've seen my role
 			</Button>
 		{/if}
+	</div>
+
+	<div class="mt-8 max-w-2xl">
+		<PlayerList players={store.players} meId={store.identity?.playerId ?? null} {hostId} />
 	</div>
 
 	{#snippet footer()}

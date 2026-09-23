@@ -2,10 +2,12 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import type { MafiaStore } from '$lib/features/mafia/multiplayer/mafia-store.svelte';
 	import PhaseShell from './PhaseShell.svelte';
+	import PlayerList from './PlayerList.svelte';
 	import TargetList from './TargetList.svelte';
 
 	let { store }: { store: MafiaStore } = $props();
 
+	const hostId = $derived(store.room?.players.find((player) => player.isHost)?.id ?? null);
 	const progress = $derived(store.publicState?.voting ?? { cast: 0, total: 0 });
 	const canVote = $derived(store.can('CAST_VOTE'));
 	const myVote = $derived(store.privateState?.ownVoteTargetId ?? null);
@@ -50,6 +52,10 @@
 			</div>
 		</div>
 	{/if}
+
+	<div class="max-w-2xl">
+		<PlayerList players={store.players} meId={store.identity?.playerId ?? null} {hostId} />
+	</div>
 
 	{#snippet footer()}
 		{#if store.isHost && store.phase === 'VOTING' && !store.allVoted}

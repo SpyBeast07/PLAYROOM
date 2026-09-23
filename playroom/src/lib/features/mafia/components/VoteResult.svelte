@@ -2,9 +2,11 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import type { MafiaStore } from '$lib/features/mafia/multiplayer/mafia-store.svelte';
 	import PhaseShell from './PhaseShell.svelte';
+	import PlayerList from './PlayerList.svelte';
 
 	let { store }: { store: MafiaStore } = $props();
 
+	const hostId = $derived(store.room?.players.find((player) => player.isHost)?.id ?? null);
 	const eliminatedId = $derived(store.publicState?.elimination?.eliminatedPlayerId ?? null);
 	const eliminatedName = $derived(
 		store.players.find((player) => player.id === eliminatedId)?.name ?? null
@@ -21,6 +23,10 @@
 		? 'The town has spoken. Night will soon fall again.'
 		: 'The votes split evenly, so the town parts ways without a verdict.'}
 >
+	<div class="max-w-2xl">
+		<PlayerList players={store.players} meId={store.identity?.playerId ?? null} {hostId} />
+	</div>
+
 	{#snippet footer()}
 		{#if store.isHost && store.phase === 'VOTE_RESULT'}
 			<div class="max-w-2xl">
