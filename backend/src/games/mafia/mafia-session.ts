@@ -29,7 +29,7 @@
  * parsing, and broadcasts are out of scope (a later phase owns the transport).
  */
 import { createMafiaGame, type CreateMafiaGameOptions, type MafiaEngine } from "./mafia-engine.ts";
-import { MAX_PLAYERS, MIN_PLAYERS } from "./constants.ts";
+import { MAX_PLAYERS } from "./constants.ts";
 import type {
   MafiaAction,
   MafiaEngineResult,
@@ -145,9 +145,13 @@ export class MafiaSessionManager {
   /**
    * Maps the room's current roster (room players → mafia players, identical
    * ids/names), creates the engine in LOBBY, and binds it to the room code.
-   * Requires a live room with MIN..MAX players and unique display names (the
-   * engine's name-uniqueness invariant; the room layer currently allows
-   * duplicates). One game per room — a second createGame throws.
+   * Requires a live room with no more than MAX players and unique display
+   * names (the engine's name-uniqueness invariant; the room layer currently
+   * allows duplicates). Any roster size (even fewer than MIN_PLAYERS) may
+   * hold a LOBBY session so the lobby view exists before the game starts —
+   * the number of players needed to actually *start* is enforced by the
+   * engine's START_GAME rule, never by session existence. One game per room —
+   * a second createGame throws.
    */
   createGame(roomCode: string): MafiaGameSession {
     const code = this.normalize(roomCode);
@@ -158,12 +162,6 @@ export class MafiaSessionManager {
     const room = this.rooms.getRoomByCode(code);
     if (room === undefined) {
       throw sessionError("ROOM_NOT_FOUND", `Room ${code} does not exist`);
-    }
-    if (room.players.length < MIN_PLAYERS) {
-      throw sessionError(
-        "NOT_ENOUGH_PLAYERS",
-        `Room ${code} needs at least ${MIN_PLAYERS} players to start a game`,
-      );
     }
     if (room.players.length > MAX_PLAYERS) {
       throw sessionError("TOO_MANY_PLAYERS", `Room ${code} exceeds the ${MAX_PLAYERS}-player cap`);

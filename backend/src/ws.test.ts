@@ -100,6 +100,9 @@ describe("WebSocket room synchronization", () => {
       await alice.next(); // room.updated
       await bob.next();   // connected
       await bob.next();   // room.updated
+      await sleep(80);
+      alice.drain(); // lobby mafia handshake (Alice hosts)
+      bob.drain();
 
       // Charlie joins through HTTP
       const charlieRes = await api(baseUrl, "POST", `/rooms/${code}/players`, { name: "Charlie" });
@@ -163,8 +166,8 @@ describe("WebSocket messages", () => {
       const id = await joinPlayer(baseUrl, code, "Alice");
       const client = new WsClient(`${wsBase}/ws/rooms/${code}?playerId=${id}`);
       expect(await expectOpen(client)).toBe(true);
-      await client.next();
-      await client.next();
+      await sleep(80);
+      client.drain(); // handshake: connected + room.updated + lobby mafia view
 
       client.send({ type: "ping" });
       const pong = await client.next();
@@ -179,8 +182,8 @@ describe("WebSocket messages", () => {
       const id = await joinPlayer(baseUrl, code, "Alice");
       const client = new WsClient(`${wsBase}/ws/rooms/${code}?playerId=${id}`);
       expect(await expectOpen(client)).toBe(true);
-      await client.next();
-      await client.next();
+      await sleep(80);
+      client.drain(); // handshake: connected + room.updated + lobby mafia view
 
       client.sentRaw("{not json");
       const err = await client.next();
@@ -198,8 +201,8 @@ describe("WebSocket messages", () => {
       const id = await joinPlayer(baseUrl, code, "Alice");
       const client = new WsClient(`${wsBase}/ws/rooms/${code}?playerId=${id}`);
       expect(await expectOpen(client)).toBe(true);
-      await client.next();
-      await client.next();
+      await sleep(80);
+      client.drain(); // handshake: connected + room.updated + lobby mafia view
 
       client.send({ type: "unknown" });
       const err = await client.next();
@@ -269,6 +272,9 @@ describe("cross-room isolation", () => {
       expect(await expectOpen(b)).toBe(true);
       await a.next(); await a.next();
       await b.next(); await b.next();
+      await sleep(80);
+      a.drain(); // lobby mafia handshake (Alice hosts)
+      b.drain();
 
       // Modify room A only
       await api(baseUrl, "POST", `/rooms/${roomA}/players`, { name: "Charlie" });
@@ -297,6 +303,9 @@ describe("HTTP + WebSocket concurrency sanity", () => {
       expect(await expectOpen(bob)).toBe(true);
       await alice.next(); await alice.next();
       await bob.next(); await bob.next();
+      await sleep(80);
+      alice.drain(); // lobby mafia handshake (Alice hosts)
+      bob.drain();
 
       const charlieId = await joinPlayer(baseUrl, code, "Charlie");
       const daveRes = await api(baseUrl, "POST", `/rooms/${code}/players`, { name: "Dave" });

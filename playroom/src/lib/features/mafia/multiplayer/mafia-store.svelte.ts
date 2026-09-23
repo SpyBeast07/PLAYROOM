@@ -198,34 +198,37 @@ export class MafiaStore {
 	// Lifecycle
 	// ---------------------------------------------------------------------------
 
-	connect(): void {
+	/** Public methods are arrow fields so `this` is always the store instance,
+	 * even when a component passes them straight to an event handler (`onclick={store.ready}`),
+	 * where Svelte would otherwise invoke them with `this` set to the element. */
+	connect = (): void => {
 		if (this.identity === null) return;
 		this.client.connect(this.roomCode, this.identity.playerId);
-	}
+	};
 
-	reconnectNow(): void {
+	reconnectNow = (): void => {
 		this.client.reconnectNow();
-	}
+	};
 
-	dispose(): void {
+	dispose = (): void => {
 		this.client.disconnect();
 		this.clearErrorTimeouts();
-	}
+	};
 
-	async leave(): Promise<void> {
+	leave = async (): Promise<void> => {
 		const identity = this.identity;
 		if (identity) {
 			this.dispose();
 			this.clearIdentityNow();
 			await api.leaveRoom(this.roomCode, identity.playerId);
 		}
-	}
+	};
 
 	// ---------------------------------------------------------------------------
 	// Actions (components call these; protocol internals stay here)
 	// ---------------------------------------------------------------------------
 
-	ready(): void {
+	ready = (): void => {
 		const identity = this.identity;
 		if (!identity) return;
 		this.send(
@@ -233,15 +236,15 @@ export class MafiaStore {
 				? { type: 'UNREADY', playerId: identity.playerId }
 				: { type: 'READY', playerId: identity.playerId }
 		);
-	}
+	};
 
-	reportRoleSeen(): void {
+	reportRoleSeen = (): void => {
 		const identity = this.identity;
 		if (!identity) return;
 		this.send({ type: 'ROLE_SEEN', playerId: identity.playerId });
-	}
+	};
 
-	advance(): void {
+	advance = (): void => {
 		if (this.phase === 'ROLE_REVEAL') this.send({ type: 'BEGIN_NIGHT' });
 		else if (this.phase === 'NIGHT')
 			this.send(this.nightPending === 0 ? { type: 'RESOLVE_NIGHT' } : { type: 'ADVANCE_PHASE' });
@@ -249,35 +252,35 @@ export class MafiaStore {
 		else if (this.phase === 'DISCUSSION') this.send({ type: 'START_VOTING' });
 		else if (this.phase === 'VOTING') this.send({ type: 'END_VOTING' });
 		else if (this.phase === 'VOTE_RESULT') this.send({ type: 'ADVANCE_PHASE' });
-	}
+	};
 
-	startGame(): void {
+	startGame = (): void => {
 		this.send({ type: 'START_GAME' });
-	}
+	};
 
-	playAgain(): void {
+	playAgain = (): void => {
 		this.send({ type: 'PLAY_AGAIN' });
-	}
+	};
 
-	nightAction(
+	nightAction = (
 		kind: 'MAFIA_KILL' | 'DOCTOR_SAVE' | 'DETECTIVE_INVESTIGATE',
 		targetId: string | null
-	): void {
+	): void => {
 		if (kind === 'DOCTOR_SAVE') {
 			this.send({ type: 'DOCTOR_SAVE', targetId });
 		} else {
 			this.send({ type: kind, targetId: targetId ?? this.identity?.playerId ?? '' });
 		}
-	}
+	};
 
-	castVote(targetId: string): void {
+	castVote = (targetId: string): void => {
 		const identity = this.identity;
 		if (identity) this.send({ type: 'CAST_VOTE', voterId: identity.playerId, targetId });
-	}
+	};
 
-	dismissError(id: number): void {
+	dismissError = (id: number): void => {
 		this.errors = this.errors.filter((error) => error.id !== id);
-	}
+	};
 
 	// ---------------------------------------------------------------------------
 	// Internals

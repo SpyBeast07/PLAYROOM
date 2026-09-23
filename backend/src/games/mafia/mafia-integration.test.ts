@@ -819,8 +819,12 @@ describe("4. disconnect and reconnect across phases", () => {
       const lobby = bob.client.drain();
       expect(lobby.some((m) => m.type === "connected")).toBe(true);
       expect(lobby.some((m) => m.type === "room.updated")).toBe(true);
-      // No game has started yet, so a fresh lobby socket gets no mafia view.
-      expect(lobby.some((m) => m.type === "mafia.private")).toBe(false);
+      // A fresh room still gets the LOBBY mafia view: the session is created
+      // eagerly, so the frontend can leave the "connecting…" state.
+      const lobbyPriv = lastPrivate(lobby);
+      expect(lobbyPriv?.["phase"]).toBe("LOBBY");
+      expect(lobbyPriv?.["role"]).toBeNull();
+      expect(lobby.some((m) => m.type === "mafia.state")).toBe(true);
 
       await readyUp(room);
       sendAction(hostOf(room).client, { type: "START_GAME" });

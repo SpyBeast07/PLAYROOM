@@ -247,23 +247,50 @@ export function createWsRouter(
    * Reconnect synchronization: replay the current public state, this player's
    * private view (which carries their role, phase, and pending action), and —
    * for the narrator connection — the narrator view. Never restarts the game.
+   *
+   * A live room always has a LOBBY view, so if no session exists yet (fresh
+   * room, nobody has acted), it is created eagerly here and reconciled against
+   * the room roster. This is what lets the frontend leave the "connecting…"
+   * state: every room member receives a `mafia.state` on connect, even before
+   * the first action. START_GAME still enforces the 4-20 player range.
    */
   function sendMafiaSync(room: Room, player: Player, ws: WsSocket): void {
-    const game = mafiaSessions.getGame(room.code);
-    if (game === undefined) return;
+    let game = mafiaSessions.getGame(room.code);
+    if (game === undefined) {
+      try {
+        game = mafiaSessions.createGame(room.code);
+        // Baseline each player's private view so broadcasts after this point
+        // carry only genuine changes, never whole-room noise.
+        primePrivateSnapshots(room, game);
+      } catch (error) {
+        if (error instanceof MafiaSessionError) {
+          // Room cannot host a session yet (e.g. duplicate display names, a
+          // start-time invariant the session layer owns). The connection stays
+          // open with the plain room view; there is simply no Mafia view yet.
+          return;
+        }
+        throw error;
+      }
+    }
+
+    game.reconcile();
 
     const code = room.code;
     sendMafia(ws, { type: "mafia.state", state: game.getPublicState() });
 
-    const privateState = game.getPlayerState(player.id);
-    sendMafia(ws, { type: "mafia.private", state: privateState });
+    try {
+      const privateState = game.getPlayerState(player.id);
+      sendMafia(ws, { type: "mafia.private", state: privateState });
 
-    let snapshots = privateSnapshots.get(code);
-    if (snapshots === undefined) {
-      snapshots = new Map();
-      privateSnapshots.set(code, snapshots);
+      let snapshots = privateSnapshots.get(code);
+      if (snapshots === undefined) {
+        snapshots = new Map();
+        privateSnapshots.set(code, snapshots);
+      }
+      snapshots.set(player.id, JSON.stringify(privateState));
+    } catch {
+      // Room member not (yet) in engine
     }
-    snapshots.set(player.id, JSON.stringify(privateState));
 
     if (isNarratorConnection(room, player.id)) {
       sendMafia(ws, { type: "mafia.narrator", state: game.getNarratorState() });

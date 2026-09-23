@@ -271,7 +271,7 @@ describe("mafia protocol primitives", () => {
 // ---------------------------------------------------------------------------
 
 describe("mafia connection handshake", () => {
-  test("valid connection with no game receives only connected + room.updated", async () => {
+  test("valid connection with no game receives connected + room.updated", async () => {
     await withServer(async ({ baseUrl, wsBase }) => {
       const code = await createRoom(baseUrl);
       const id = await joinPlayer(baseUrl, code, "Ada");
@@ -279,12 +279,22 @@ describe("mafia connection handshake", () => {
       expect(await expectOpen(client)).toBe(true);
       await sleep(80);
       const msgs = client.drain();
-      expect(msgs.map((m) => m.type)).toEqual(["connected", "room.updated"]);
+      expect(msgs.map((m) => m.type)).toEqual([
+        "connected",
+        "room.updated",
+        "mafia.state",
+        "mafia.private",
+        "mafia.narrator",
+      ]);
+      const pub = lastPublic(msgs);
+      expect(pub?.["phase"]).toBe("LOBBY");
+      expect((pub?.["players"] as AnyRecord[])).toHaveLength(1);
+      expect(lastPrivate(msgs)?.["role"]).toBeNull();
       client.close();
     });
   });
 
-  test("action before the game exists yields NOT_ENOUGH_PLAYERS and keeps the connection", async () => {
+  test("a sub-minimum lobby still accepts READY; START_GAME gates on the player minimum and keeps the connection", async () => {
     await withServer(async ({ baseUrl, wsBase }) => {
       const code = await createRoom(baseUrl);
       const id = await joinPlayer(baseUrl, code, "Ada");
@@ -293,7 +303,14 @@ describe("mafia connection handshake", () => {
       await sleep(80);
       client.drain();
 
+      // READY is valid in the LOBBY session even with a single player.
       sendAction(client, { type: "READY", playerId: id });
+      await sleep(80);
+      expect(lastErrorCode(client.drain())).toBeUndefined();
+
+      // The host still cannot start a sub-minimum lobby (engine rule), and the
+      // rejection never severs the socket.
+      sendAction(client, { type: "START_GAME" });
       await sleep(80);
       expect(lastErrorCode(client.drain())).toBe("NOT_ENOUGH_PLAYERS");
 
@@ -791,7 +808,7 @@ describe("room isolation", () => {
       expect(await expectNoMessage(eve.client, 300)).toBe(true);
       expect(await expectNoMessage(fay.client, 300)).toBe(true);
 
-      sendAction(eve.client, { type: "READY", playerId: eve.id });
+      sendAction(eve.client, { type: "START_GAME" });
       await sleep(80);
       expect(lastErrorCode(eve.client.drain())).toBe("NOT_ENOUGH_PLAYERS");
       expect(await expectNoMessage(fay.client, 200)).toBe(true);

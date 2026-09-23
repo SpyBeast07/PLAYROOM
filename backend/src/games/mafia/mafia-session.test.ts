@@ -168,12 +168,24 @@ test("createGame rejects an unknown room with ROOM_NOT_FOUND", () => {
   expect(() => session.createGame("NOEXIST")).toThrow("ROOM_NOT_FOUND");
 });
 
-test("createGame rejects a room with fewer than MIN_PLAYERS", () => {
+test("createGame allows a below-minimum lobby (start enforces the 4-player minimum)", () => {
   const rooms = new RoomManager();
   const { code } = rooms.createRoom();
   fillRoom(rooms, code, ["Ada", "Bob", "Cam"]);
   const session = sessionFor(rooms);
-  expect(() => session.createGame(code)).toThrow("NOT_ENOUGH_PLAYERS");
+
+  const game = session.createGame(code);
+  expect(game.getPublicState().phase).toBe("LOBBY");
+  expect(game.getPublicState().players).toHaveLength(3);
+
+  // The session may exist with 1-2 players too — the lobby must render.
+  const { code: small } = rooms.createRoom();
+  fillRoom(rooms, small, ["Solo"]);
+  expect(session.createGame(small).getPublicState().players).toHaveLength(1);
+
+  // Whatever the roster, START_GAME still requires MIN_PLAYERS.
+  expect(game.dispatch({ type: "START_GAME", actor: { type: "SYSTEM" } }).success).toBe(false);
+  expect(rooms.getRoomByCode(code)?.status).toBe("waiting");
 });
 
 test("createGame defends against more than MAX_PLAYERS (unreachable via RoomManager cap)", () => {
