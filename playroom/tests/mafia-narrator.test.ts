@@ -52,13 +52,20 @@ const NIGHT = (kill: NightActionStatus = 'NOT_ACTED'): NightView => ({
 		{ id: 'p3', name: 'Cam', alive: true },
 		{ id: 'p6', name: 'Frank', alive: true }
 	],
-	kill: { action: 'MAFIA_KILL', status: kill, targetId: null, targetName: null },
-	save: { action: 'DOCTOR_SAVE', status: 'NOT_ACTED', targetId: null, targetName: null },
+	kill: { action: 'MAFIA_KILL', status: kill, targetId: null, targetName: null, verdict: null },
+	save: {
+		action: 'DOCTOR_SAVE',
+		status: 'NOT_ACTED',
+		targetId: null,
+		targetName: null,
+		verdict: null
+	},
 	investigate: {
 		action: 'DETECTIVE_INVESTIGATE',
 		status: 'NOT_ACTED',
 		targetId: null,
-		targetName: null
+		targetName: null,
+		verdict: null
 	}
 });
 
@@ -131,7 +138,13 @@ describe('narrator console — rendered screens', () => {
 	it('night unlocks resolution once the Mafia has acted, then opens the doctor step with a pass', () => {
 		const view: NightView = {
 			...NIGHT('SUBMITTED'),
-			kill: { action: 'MAFIA_KILL', status: 'SUBMITTED', targetId: 'p2', targetName: 'Bob' }
+			kill: {
+				action: 'MAFIA_KILL',
+				status: 'SUBMITTED',
+				targetId: 'p2',
+				targetName: 'Bob',
+				verdict: null
+			}
 		};
 		const { body } = render(NightControls, { props: { store: storeWith(view) } });
 		expect(body).toContain('Who does the doctor pick?');
@@ -141,12 +154,14 @@ describe('narrator console — rendered screens', () => {
 		expect(buttonDisabled(body, 'Resolve the night')).toBe(false);
 	});
 
-	it('role reveal keeps every role out of the markup until tapped open', () => {
+	it('role reveal keeps every role hidden until the single reveal-all toggle is pressed', () => {
 		const { body } = render(RoleRevealControls, { props: { store: storeWith(REVEAL) } });
-		expect(body).toContain('Reveal role');
+		expect(body).toContain('Reveal all roles');
 		expect(body).not.toContain('Villager');
 		expect(body).not.toContain('Doctor');
 		expect(body).not.toContain('Mafia');
+		// The night cannot start until the narrator has actually revealed roles.
+		expect(buttonDisabled(body, 'Begin the night')).toBe(true);
 	});
 
 	it('voting asks for the next spoken vote and shows the running tally', () => {

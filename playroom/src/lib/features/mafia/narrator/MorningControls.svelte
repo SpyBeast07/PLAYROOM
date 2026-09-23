@@ -23,7 +23,7 @@
 		<div class="max-w-2xl">
 			<SayLine
 				text={morning.deaths.length > 0
-					? `Good morning. The town woke to find ${names(morning.deaths)} no longer with us.`
+					? `Good morning. The town woke to find ${names(morning.deaths)} is no longer with us.`
 					: 'Good morning, everyone. The night was quiet — nobody died.'}
 			/>
 

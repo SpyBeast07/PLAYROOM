@@ -19,6 +19,7 @@
 		key: NightActionType;
 		label: string;
 		openSay: string;
+		doneSay: string | null;
 		slot: NarratorNightSlot;
 	}
 
@@ -28,7 +29,8 @@
 			{
 				key: 'MAFIA_KILL',
 				label: 'Mafia',
-				openSay: `${night.actingMafiaName} — open your eyes. Show me who to eliminate tonight.`,
+				openSay: `Mafia — open your eyes. Show me who to eliminate tonight.`,
+				doneSay: null,
 				slot: night.kill
 			},
 			{
@@ -36,12 +38,17 @@
 				label: 'Doctor',
 				openSay:
 					'Doctor — open your eyes. Who do you protect tonight? You may also protect no one.',
+				doneSay: null,
 				slot: night.save
 			},
 			{
 				key: 'DETECTIVE_INVESTIGATE',
 				label: 'Detective',
 				openSay: 'Detective — open your eyes. Look closely at one player.',
+				doneSay:
+					night?.investigate.status !== 'NOT_ACTED' && night.investigate.targetName
+						? `Tell the detective about his choice. Then say: Everyone, open your eyes.`
+						: null,
 				slot: night.investigate
 			}
 		];
@@ -49,6 +56,7 @@
 
 	const current = $derived(steps.find((step) => step.slot.status === 'NOT_ACTED') ?? null);
 	const killDone = $derived(night !== null && night.kill.status !== 'NOT_ACTED');
+	const investigateDone = $derived(night !== null && night.investigate.status !== 'NOT_ACTED');
 
 	const targets = $derived.by<NarratorPublicPlayer[]>(() => {
 		if (night === null || current === null) return [];
@@ -96,8 +104,25 @@
 			<SayLine
 				text={current
 					? current.openSay
-					: 'All eyes are closed again — everyone, open your eyes when I say.'}
+					: investigateDone
+						? (steps.find((s) => s.key === 'DETECTIVE_INVESTIGATE')?.doneSay ??
+							'All eyes are closed again — everyone, open your eyes when I say.')
+						: 'All eyes are closed again — everyone, open your eyes when I say.'}
 			/>
+
+			{#if investigateDone}
+				<div
+					class="mt-6 rounded-md border border-accent/40 bg-surface p-4"
+					aria-label="Detective's verdict"
+				>
+					<p class="eyebrow mb-1">Detective's verdict — tell them in private</p>
+					<p class="text-lg leading-relaxed">
+						{night.investigate.targetName}
+						{night.investigate.verdict === true ? 'IS' : 'is NOT'}{' '}
+						the Mafia.
+					</p>
+				</div>
+			{/if}
 
 			{#if current}
 				<div class="mt-6">
@@ -140,9 +165,11 @@
 				<p class="mt-3 text-sm text-muted">
 					{!killDone
 						? 'Wait for the Mafia to pick a target before resolving.'
-						: current
-							? 'Any remaining role below just sits out this night.'
-							: "All three roles have chosen — resolve with everyone's eyes still closed."}
+						: investigateDone
+							? "The detective has reported — resolve with everyone's eyes still closed."
+							: current
+								? 'Any remaining role below just sits out this night.'
+								: "All three roles have chosen — resolve with everyone's eyes still closed."}
 				</p>
 			</div>
 		{/snippet}

@@ -34,6 +34,8 @@ export interface NarratorNightSlot {
 	status: NightActionStatus;
 	targetId: string | null;
 	targetName: string | null;
+	/** For DETECTIVE_INVESTIGATE: the verdict (is the target Mafia?). Populated immediately after the detective acts. */
+	verdict: boolean | null;
 }
 
 export interface NarratorVote {

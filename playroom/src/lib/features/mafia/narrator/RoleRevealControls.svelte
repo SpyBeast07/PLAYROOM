@@ -2,7 +2,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import { ROLE_LABELS } from './labels';
 	import type { NarratorStore } from './narrator-store.svelte';
-	import type { NarratorRoleRow, NarratorView } from './types';
+	import type { NarratorView } from './types';
 	import PhaseShell from '../components/PhaseShell.svelte';
 	import SayLine from './SayLine.svelte';
 
@@ -10,19 +10,12 @@
 
 	const reveal = $derived(store.view as Extract<NarratorView, { kind: 'ROLE_REVEAL' }> | null);
 
-	let openId = $state<string | null>(null);
-	let toldIds = $state<string[]>([]);
+	let showing = $state(false);
+	let hasRevealed = $state(false);
 
-	const allTold = $derived(reveal !== null && toldIds.length === reveal.players.length);
-
-	function revealRow(player: NarratorRoleRow) {
-		if (openId === player.id) openId = null;
-		else openId = player.id;
-	}
-
-	function markTold(player: NarratorRoleRow) {
-		if (!toldIds.includes(player.id)) toldIds = [...toldIds, player.id];
-		if (openId === player.id) openId = null;
+	function toggleReveal() {
+		showing = !showing;
+		if (showing) hasRevealed = true;
 	}
 </script>
 
@@ -37,60 +30,32 @@
 				text="Everyone, close your eyes. I'll walk the room and whisper each role — keep it secret until I say otherwise."
 			/>
 
-			<ol class="mt-6 divide-y divide-border border-t border-border" aria-label="Role reveal order">
-				{#each reveal.players as player (player.id)}
-					<li class="py-3">
-						<div class="flex items-center gap-3">
-							<span
-								class="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-surface text-sm font-semibold"
-								aria-hidden="true"
-							>
-								{player.name.slice(0, 1).toUpperCase()}
-							</span>
-							<p class="min-w-0 flex-1 truncate font-medium">
-								{player.name}
-								{#if toldIds.includes(player.id)}
-									<span class="ml-2 text-sm font-normal text-muted">told</span>
-								{/if}
-							</p>
-							{#if toldIds.includes(player.id)}
-								<span aria-label="Told" class="text-accent">
-									<svg
-										class="size-5"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M4 12.5l5 5L20 6.5" stroke-linecap="round" stroke-linejoin="round" />
-									</svg>
+			<div class="mt-6">
+				<Button size="lg" onclick={toggleReveal} variant={showing ? 'secondary' : 'primary'}>
+					{showing ? 'Hide roles' : 'Reveal all roles'}
+				</Button>
+
+				{#if showing}
+					<ol class="mt-6 divide-y divide-border border-t border-border" aria-label="Dealt roles">
+						{#each reveal.players as player (player.id)}
+							<li class="flex items-center gap-3 py-2">
+								<span
+									class="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-surface text-sm font-semibold"
+									aria-hidden="true"
+								>
+									{player.name.slice(0, 1).toUpperCase()}
 								</span>
-							{:else}
-								<Button variant="secondary" onclick={() => revealRow(player)}>
-									{openId === player.id ? 'Hide' : 'Reveal role'}
-								</Button>
-							{/if}
-						</div>
-						{#if openId === player.id && !toldIds.includes(player.id)}
-							<div
-								class="mt-3 rounded-md border border-accent/40 bg-accent/5 p-4"
-								aria-label={`${player.name}'s role`}
-							>
-								<p class="eyebrow mb-1">Whisper this</p>
-								<p class="text-2xl font-semibold tracking-tight">
-									{player.name}, you are the {ROLE_LABELS[player.role]}
-								</p>
-								<p class="mt-2 text-sm leading-relaxed text-muted">
-									Keep it secret. Tell them to close their eyes again before the next person.
-								</p>
-								<Button size="lg" onclick={() => markTold(player)} class="mt-4">
-									I've told them
-								</Button>
-							</div>
-						{/if}
-					</li>
-				{/each}
-			</ol>
+								<p class="min-w-0 flex-1 truncate font-medium">{player.name}</p>
+								<p class="text-sm font-semibold text-muted">{ROLE_LABELS[player.role]}</p>
+							</li>
+						{/each}
+					</ol>
+				{:else}
+					<p class="mt-4 text-sm text-muted">
+						Roles stay hidden until you reveal them all together.
+					</p>
+				{/if}
+			</div>
 		</div>
 
 		{#snippet footer()}
@@ -98,15 +63,15 @@
 				<Button
 					size="lg"
 					onclick={store.beginNight}
-					disabled={!allTold || store.busy}
+					disabled={!hasRevealed || store.busy}
 					class="w-full sm:w-auto"
 				>
 					Begin the night
 				</Button>
 				<p class="mt-3 text-sm text-muted">
-					{allTold
-						? 'All roles are told — dim the lights and begin the first night.'
-						: 'Whisper every role before moving to night.'}
+					{hasRevealed
+						? 'Dim the lights and begin the first night.'
+						: 'Reveal the roles before moving to night.'}
 				</p>
 			</div>
 		{/snippet}

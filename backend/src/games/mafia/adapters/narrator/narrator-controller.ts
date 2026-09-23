@@ -309,12 +309,20 @@ export class NarratorController {
   private nightView(n: MafiaNarratorState): NarratorView {
     const slots = n.nightActions;
     if (slots === null) return this.lobbyView(n); // defensive; unreachable mid-night
-    const slot = (action: NightActionType, s: MafiaNightAction): NarratorNightSlot => ({
-      action,
-      status: s.status,
-      targetId: s.targetId,
-      targetName: s.targetId !== null ? this.nameOf(n, s.targetId) : null,
-    });
+    const slot = (action: NightActionType, s: MafiaNightAction): NarratorNightSlot => {
+      const base = {
+        action,
+        status: s.status,
+        targetId: s.targetId,
+        targetName: s.targetId !== null ? this.nameOf(n, s.targetId) : null,
+        verdict: null as boolean | null,
+      };
+      // For investigation, reveal the verdict immediately after the detective acts.
+      if (action === "DETECTIVE_INVESTIGATE" && s.status !== "NOT_ACTED" && s.targetId !== null) {
+        return { ...base, verdict: n.roles[s.targetId] === "MAFIA" };
+      }
+      return base;
+    };
     return {
       kind: "NIGHT",
       nightNumber: n.publicState.nightNumber,
