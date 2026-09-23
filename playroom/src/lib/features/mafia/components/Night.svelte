@@ -8,59 +8,59 @@
 	let { store }: { store: MafiaStore } = $props();
 
 	const hostId = $derived(store.room?.players.find((player) => player.isHost)?.id ?? null);
+	const nightNumber = $derived(store.publicState?.nightNumber ?? 1);
 	const canKill = $derived(store.can('MAFIA_KILL'));
 	const canSave = $derived(store.can('DOCTOR_SAVE'));
 	const canInvestigate = $derived(store.can('DETECTIVE_INVESTIGATE'));
 	const acting = $derived(canKill || canSave || canInvestigate);
-	const acted = $derived(store.privateState?.ownNightAction !== null);
+	const ownNightAction = $derived(store.privateState?.ownNightAction ?? null);
+	const acted = $derived(
+		ownNightAction === 'SUBMITTED' || ownNightAction === 'PASSED' || ownNightAction === 'SKIPPED'
+	);
 
 	const targets = $derived(store.livingPlayers);
+
+	const stepTitle = $derived.by<string>(() => {
+		if (!store.myAlive) return "You're out of the game";
+		if (!acted) {
+			if (canKill) return 'Choose a player to eliminate';
+			if (canSave) return 'Choose a player to save';
+			if (canInvestigate) return 'Choose a player to investigate';
+		}
+		if (acted) return 'Choice recorded';
+		return 'Keep your eyes closed';
+	});
+
+	const stepSubtitle = $derived.by<string>(() => {
+		if (!store.myAlive) return 'Wait quietly through the night.';
+		if (acted) return 'Waiting for the night to resolve...';
+		if (acting) return '';
+		return 'The night is in progress...';
+	});
 </script>
 
-<PhaseShell
-	eyebrow="Night {store.publicState?.nightNumber ?? 1}"
-	title="The city sleeps"
-	subtitle="Keep your eyes closed. Move and act without being noticed."
-	lead={store.myAlive
-		? canKill
-			? 'Silently choose who the Mafia takes tonight.'
-			: canSave
-				? 'Choose who to protect tonight \u2014 or pass to protect no one.'
-				: canInvestigate
-					? 'Study the town. Choose one player to investigate tonight.'
-					: 'You cannot act tonight. Stay quiet and wait for morning.'
-		: "You're out of the game. Wait quietly through the night."}
->
+<PhaseShell eyebrow={`NIGHT ${nightNumber}`} title={stepTitle} subtitle={stepSubtitle}>
 	<div class="max-w-2xl">
 		<PlayerList players={store.players} meId={store.identity?.playerId ?? null} {hostId} />
 	</div>
 
 	{#if store.myAlive && acting && !acted}
 		<div class="max-w-2xl">
-			{#if canSave}
-				<p class="mb-3 text-sm text-muted">Who will you protect?</p>
-				<TargetList
-					{targets}
-					onPick={(id) => store.nightAction('DOCTOR_SAVE', id)}
-					passLabel="Protect no one"
-					onPass={() => store.nightAction('DOCTOR_SAVE', null)}
-				/>
-			{:else}
-				{#if canKill}
-					<p class="mb-3 text-sm text-muted">Choose your target.</p>
-				{:else}
-					<p class="mb-3 text-sm text-muted">Who will you investigate?</p>
-				{/if}
-				<TargetList
-					{targets}
-					onPick={(id) => store.nightAction(canKill ? 'MAFIA_KILL' : 'DETECTIVE_INVESTIGATE', id)}
-				/>
-			{/if}
+			<TargetList
+				{targets}
+				onPick={(id) =>
+					store.nightAction(
+						canSave ? 'DOCTOR_SAVE' : canKill ? 'MAFIA_KILL' : 'DETECTIVE_INVESTIGATE',
+						id
+					)}
+				passLabel={canSave ? 'Protect no one' : ''}
+				onPass={canSave ? () => store.nightAction('DOCTOR_SAVE', null) : undefined}
+			/>
 		</div>
-	{:else if acted}
+	{:else if store.myAlive && acted}
 		<div class="max-w-2xl">
 			<p class="rounded-md border border-border bg-surface p-4 text-sm text-muted">
-				Your choice is recorded. Keep quiet and wait for the others…
+				Waiting for the night to resolve...
 			</p>
 		</div>
 	{/if}

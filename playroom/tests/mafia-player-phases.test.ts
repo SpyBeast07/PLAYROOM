@@ -127,7 +127,10 @@ function makePrivate(role: MafiaRole, phase: MafiaPhase, liveIds: string[]): Maf
 		phase,
 		nightNumber: 1,
 		availableActions: actionsFor(phase),
-		ownNightAction: null,
+		ownNightAction:
+			phase === 'NIGHT' && (role === 'MAFIA' || role === 'DOCTOR' || role === 'DETECTIVE')
+				? 'NOT_ACTED'
+				: null,
 		ownPrivateNightResult: null,
 		ownVoteTargetId: null
 	};
@@ -356,6 +359,67 @@ describe('ready flow reads, more people also use it', () => {
 		];
 		for (const name of methods) {
 			expect(Object.hasOwn(store, name), `${name} should be an own arrow field`).toBe(true);
+		}
+	});
+});
+
+describe('night acting panel with real private state', () => {
+	const NIGHT_SEED = SEEDS.find((seed) => seed.label === 'NIGHT')!;
+
+	function nightStore(
+		role: MafiaRole,
+		ownNightAction: MafiaPlayerState['ownNightAction']
+	): MafiaStore {
+		const store = makeStore(NIGHT_SEED, role);
+		store.privateState = { ...(store.privateState as MafiaPlayerState), ownNightAction };
+		return store;
+	}
+
+	const STEP_TEXT: Record<'MAFIA' | 'DOCTOR' | 'DETECTIVE', string> = {
+		MAFIA: 'Choose a player to eliminate',
+		DOCTOR: 'Choose a player to save',
+		DETECTIVE: 'Choose a player to investigate'
+	};
+
+	for (const role of ['MAFIA', 'DOCTOR', 'DETECTIVE'] as const) {
+		it(`${role} sees the selectable target list while their action is NOT_ACTED`, () => {
+			const { html } = render(Night, { props: { store: nightStore(role, 'NOT_ACTED') } });
+
+			expect(html).toContain('NIGHT 1');
+			expect(html).toContain(STEP_TEXT[role]);
+			expect(html).not.toContain('Choice recorded');
+			expect(html).not.toContain('Keep your eyes closed');
+			for (const p of PLAYERS) {
+				expect(html, `${p.name} must be selectable by ${role}`).toContain(p.name);
+			}
+			// No more than the target buttons (+ the Doctor pass link).
+			expect(countIn(html, '<button')).toBe(PLAYERS.length + (role === 'DOCTOR' ? 1 : 0));
+			expect(countIn(html, 'aria-label="Players"')).toBe(1);
+		});
+	}
+
+	it('a villager gets no acting panel at night (no targets, no recorded notice)', () => {
+		const { html } = render(Night, { props: { store: nightStore('VILLAGER', null) } });
+		expect(html).toContain('NIGHT 1');
+		expect(html).toContain('Keep your eyes closed');
+		expect(html).toContain('The night is in progress...');
+		expect(html).not.toContain('Choice recorded');
+		expect(html).not.toContain('<button');
+	});
+
+	it('an acting role with a recorded action sees the confirmation, not the target list', () => {
+		for (const [role, status] of [
+			['MAFIA', 'SUBMITTED'],
+			['DOCTOR', 'PASSED'],
+			['DETECTIVE', 'SUBMITTED'],
+			['MAFIA', 'SKIPPED']
+		] as const) {
+			const { html } = render(Night, { props: { store: nightStore(role, status) } });
+			expect(html).toContain('NIGHT 1');
+			expect(html).toContain('Choice recorded');
+			expect(html).toContain('Waiting for the night to resolve...');
+			expect(countIn(html, '<button')).toBe(0);
+			expect(countIn(html, 'aria-label="Players"')).toBe(1);
 		}
 	});
 });
