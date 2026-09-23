@@ -14,8 +14,8 @@
 		<p class="eyebrow mb-6">Catalog</p>
 		<h1 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Games</h1>
 		<p class="mt-5 text-lg leading-relaxed text-muted">
-			Mafia is ready to play with the whole room — everyone on their own phone. The rest are still
-			in the workshop.
+			Mafia is ready to play — either with the whole room on their own phones, or with a single
+			device driving the game as a narrator. The rest are still in the workshop.
 		</p>
 	</div>
 
@@ -30,9 +30,10 @@
 					<p class="mt-1.5 max-w-xl leading-relaxed text-muted">{game.description}</p>
 				</div>
 				{#if game.name === 'Mafia'}
-					<div class="flex gap-2">
+					<div class="flex flex-wrap gap-2">
 						<Button href="/create" variant="secondary">Create</Button>
 						<Button href="/join" variant="secondary">Join</Button>
+						<Button href="/mafia/narrator" variant="secondary">Narrator</Button>
 					</div>
 				{:else}
 					<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Coming soon</p>

@@ -86,6 +86,8 @@ export type NarratorView =
       kind: "NIGHT";
       nightNumber: number;
       actingMafiaName: string;
+      /** Full roster (alive flags) so the narrator can pick night targets by name. */
+      players: NarratorPublicPlayer[];
       kill: NarratorNightSlot;
       save: NarratorNightSlot;
       investigate: NarratorNightSlot;

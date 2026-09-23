@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { health } from "./routes/health.ts";
+import { createNarratorRouter } from "./routes/narrator.ts";
 import { createRoomRouter } from "./routes/rooms.ts";
+import { NarratorController } from "./games/mafia/adapters/narrator/narrator-controller.ts";
 import { ConnectionManager } from "./realtime/connection-manager.ts";
 import { createWsRouter } from "./realtime/ws.ts";
 import { RoomManager } from "./rooms/room-manager.ts";
@@ -57,6 +59,7 @@ export function createApp() {
   app.route("/health", health);
   app.route("/rooms", createRoomRouter(roomManager, connections));
   app.route("/ws", createWsRouter(roomManager, connections, mafiaSessions));
+  app.route("/narrator", createNarratorRouter(new NarratorController()));
 
   return app;
 }

@@ -319,6 +319,7 @@ export class NarratorController {
       kind: "NIGHT",
       nightNumber: n.publicState.nightNumber,
       actingMafiaName: this.nameOf(n, n.actingMafiaId ?? ""),
+      players: this.publicPlayers(n),
       kill: slot("MAFIA_KILL", slots.kill),
       save: slot("DOCTOR_SAVE", slots.save),
       investigate: slot("DETECTIVE_INVESTIGATE", slots.investigate),

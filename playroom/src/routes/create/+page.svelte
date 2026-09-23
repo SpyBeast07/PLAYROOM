@@ -9,10 +9,12 @@
 
 	let selectedGame = $state('');
 	let name = $state('');
+	let mode = $state<'own' | 'narrator'>('own');
 	let error = $state('');
 	let busy = $state(false);
 
 	const mafiaSelected = $derived(selectedGame === 'Mafia');
+	const narratorMode = $derived(mode === 'narrator');
 
 	function handleNameInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
@@ -20,10 +22,20 @@
 		error = '';
 	}
 
+	function handleModePick() {
+		name = '';
+		error = '';
+	}
+
 	async function handleCreate(event: SubmitEvent) {
 		event.preventDefault();
 		if (!mafiaSelected) return;
 		if (busy) return;
+
+		if (narratorMode) {
+			goto(resolve('/mafia/narrator'));
+			return;
+		}
 
 		const trimmedName = name.trim();
 		if (trimmedName.length < 1) {
@@ -102,36 +114,100 @@
 
 			{#if mafiaSelected}
 				<div class="mt-10 max-w-md">
-					<label for="host-name" class="block text-sm font-medium">Your display name</label>
-					<input
-						id="host-name"
-						name="host-name"
-						type="text"
-						value={name}
-						oninput={handleNameInput}
-						placeholder="Alex"
-						autocomplete="off"
-						maxlength={20}
-						aria-describedby={error ? 'create-error' : undefined}
-						aria-invalid={error ? true : undefined}
-						class="mt-2 h-14 w-full rounded-md border bg-surface px-4 text-base placeholder:text-faint {error
-							? 'border-destructive'
-							: 'border-border'}"
-					/>
-					{#if error}
-						<p id="create-error" class="mt-2 text-sm text-destructive">{error}</p>
+					<fieldset class="border-t border-border pt-6">
+						<legend class="text-base font-semibold tracking-tight">How are you playing?</legend>
+						<ul class="mt-4 grid gap-3">
+							<li>
+								<label
+									class="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-surface p-4 {!narratorMode
+										? 'border-accent'
+										: ''}"
+								>
+									<input
+										type="radio"
+										name="mafia-mode"
+										value="own"
+										bind:group={mode}
+										onchange={handleModePick}
+										class="mt-1 accent-accent"
+									/>
+									<span>
+										<span class="block font-medium">Everyone on their own phone</span>
+										<span class="mt-0.5 block text-sm text-muted">
+											Create a room with a code. Everyone joins, sees only their own secret, and the
+											host runs the public flow.
+										</span>
+									</span>
+								</label>
+							</li>
+							<li>
+								<label
+									class="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-surface p-4 {narratorMode
+										? 'border-accent'
+										: ''}"
+								>
+									<input
+										type="radio"
+										name="mafia-mode"
+										value="narrator"
+										bind:group={mode}
+										onchange={handleModePick}
+										class="mt-1 accent-accent"
+									/>
+									<span>
+										<span class="block font-medium">One phone + a narrator</span>
+										<span class="mt-0.5 block text-sm text-muted">
+											A single device drives the whole game. Players don't use phones at all — the
+											narrator reads every line aloud.
+										</span>
+									</span>
+								</label>
+							</li>
+						</ul>
+					</fieldset>
+
+					{#if narratorMode}
+						<div class="mt-6">
+							<Button type="submit" size="lg" class="w-full sm:w-auto">Open the narrator</Button>
+							<p class="mt-3 text-sm text-muted">
+								You'll run the game from one device. No room code — nothing to share with anyone's
+								phone.
+							</p>
+						</div>
+					{:else}
+						<div class="mt-6">
+							<label for="host-name" class="block text-sm font-medium">Your display name</label>
+							<input
+								id="host-name"
+								name="host-name"
+								type="text"
+								value={name}
+								oninput={handleNameInput}
+								placeholder="Alex"
+								autocomplete="off"
+								maxlength={20}
+								aria-describedby={error ? 'create-error' : undefined}
+								aria-invalid={error ? true : undefined}
+								class="mt-2 h-14 w-full rounded-md border bg-surface px-4 text-base placeholder:text-faint {error
+									? 'border-destructive'
+									: 'border-border'}"
+							/>
+							{#if error}
+								<p id="create-error" class="mt-2 text-sm text-destructive">{error}</p>
+							{/if}
+							<Button
+								type="submit"
+								size="lg"
+								class="mt-6 w-full sm:w-auto"
+								disabled={busy || name.trim().length < 1}
+							>
+								{busy ? 'Creating…' : 'Create room'}
+							</Button>
+							<p class="mt-3 text-sm text-muted">
+								You'll become the host, get a room code to share, and jump straight into the lobby.
+							</p>
+						</div>
 					{/if}
-					<Button
-						type="submit"
-						size="lg"
-						class="mt-6 w-full sm:w-auto"
-						disabled={busy || name.trim().length < 1}
-					>
-						{busy ? 'Creating…' : 'Create room'}
-					</Button>
-					<p class="mt-3 text-sm text-muted">
-						You'll become the host, get a room code to share, and jump straight into the lobby.
-					</p>
 				</div>
 			{:else}
 				<div class="mt-10">
